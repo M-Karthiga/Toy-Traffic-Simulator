@@ -112,9 +112,9 @@ class Visualiser:
         axes[0, 0].set_xlim(0, 1)
 
         junction_ids = list(stats["junctions"].keys())
-        junction_waits = [stats["junctions"][junction_id]["avg_wait_time_s"] for junction_id in junction_ids]
-        axes[0, 1].bar(junction_ids, junction_waits, color="#f8961e")
-        axes[0, 1].set_title("Average Junction Wait", color=TEXT_COLOR)
+        junction_queues = [stats["junctions"][junction_id]["current_queue"] for junction_id in junction_ids]
+        axes[0, 1].bar(junction_ids, junction_queues, color="#f8961e")
+        axes[0, 1].set_title("Current Junction Queue", color=TEXT_COLOR)
 
         sink_ids = list(stats["sinks"].keys())
         sink_arrivals = [stats["sinks"][sink_id]["arrived"] for sink_id in sink_ids]

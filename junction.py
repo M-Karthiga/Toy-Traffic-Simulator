@@ -41,7 +41,6 @@ class Junction:
         self._lane_deficit: Dict[Tuple[str, int], float] = {}
 
         self.total_processed = 0
-        self.total_wait_time = 0.0
         self.max_queue = 0
 
     def add_incoming_road(self, road_id: str) -> None:
@@ -88,11 +87,6 @@ class Junction:
     def total_queued(self, roads: Dict[str, object]) -> int:
         return sum(self._lane_queue_length(roads, lane_phase) for lane_phase in self._all_lane_phases(roads))
 
-    def avg_wait_time(self) -> float:
-        if self.total_processed == 0:
-            return 0.0
-        return self.total_wait_time / self.total_processed
-
     def step(self, dt: float, roads: Dict[str, object], current_time: float) -> List[object]:
         if len(self.incoming_roads) <= 1:
             return self._step_unsignalized(roads, current_time)
@@ -124,9 +118,6 @@ class Junction:
                     popped = road.pop_front_vehicle(lane_index, current_time)
                     if popped is None:
                         break
-                    wait_started = popped._wait_started_at
-                    if wait_started is not None:
-                        self.total_wait_time += current_time - wait_started
                     popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                     moved.append(popped)
                     self.total_processed += 1
@@ -142,9 +133,6 @@ class Junction:
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     break
-                wait_started = popped._wait_started_at
-                if wait_started is not None:
-                    self.total_wait_time += current_time - wait_started
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                 if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
                     road._occupancy[lane_index][road.stop_cell] = popped
@@ -211,9 +199,6 @@ class Junction:
                 if desired_road_id is None:
                     popped = road.pop_front_vehicle(lane_index, current_time)
                     if popped is not None:
-                        wait_started = popped._wait_started_at
-                        if wait_started is not None:
-                            self.total_wait_time += current_time - wait_started
                         popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                         moved.append(popped)
                         self.total_processed += 1
@@ -229,9 +214,6 @@ class Junction:
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     continue
-                wait_started = popped._wait_started_at
-                if wait_started is not None:
-                    self.total_wait_time += current_time - wait_started
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                 if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
                     road._occupancy[lane_index][road.stop_cell] = popped

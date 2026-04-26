@@ -281,7 +281,6 @@ class SimulationEngine:
         junction_stats = {
             junction_id: {
                 "processed": junction.total_processed,
-                "avg_wait_time_s": junction.avg_wait_time(),
                 "max_queue": junction.max_queue,
                 "current_queue": junction.total_queued(self.roads),
                 "green_incoming": junction.current_green,
