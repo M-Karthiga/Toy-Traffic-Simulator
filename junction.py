@@ -36,6 +36,7 @@ class Junction:
         self.incoming_roads: List[str] = []
         self.outgoing_roads: List[str] = []
         self._current_lane_phase: Optional[Tuple[str, int]] = None
+        self._current_phase_group: List[Tuple[str, int]] = []
         self._phase_elapsed = 0.0
         self._lane_deficit: Dict[Tuple[str, int], float] = {}
 
@@ -61,6 +62,9 @@ class Junction:
     def signal_states(self, roads: Dict[str, object]) -> Dict[str, str]:
         if len(self.incoming_roads) <= 1:
             return {}
+        green_set = set(self._current_phase_group) if self._current_phase_group else (
+            {self._current_lane_phase} if self._current_lane_phase else set()
+        )
         states: Dict[str, str] = {}
         for road_id in self.incoming_roads:
             road = roads.get(road_id)
@@ -68,17 +72,19 @@ class Junction:
                 continue
             for lane_index in range(road.lanes):
                 key = f"{road_id}:{lane_index}"
-                states[key] = "GREEN" if self._current_lane_phase == (road_id, lane_index) else "RED"
+                states[key] = "GREEN" if (road_id, lane_index) in green_set else "RED"
         return states
 
     def get_signal_for_lane(self, road_id: str, lane_index: int) -> str:
         """Return 'GREEN' or 'RED' for a specific incoming lane at this junction."""
         if len(self.incoming_roads) <= 1:
-            return "GREEN"  # unsignalized — always green
+            return "GREEN"
+        if self._current_phase_group:
+            return "GREEN" if (road_id, lane_index) in self._current_phase_group else "RED"
         if self._current_lane_phase == (road_id, lane_index):
             return "GREEN"
         return "RED"
-        
+
     def total_queued(self, roads: Dict[str, object]) -> int:
         return sum(self._lane_queue_length(roads, lane_phase) for lane_phase in self._all_lane_phases(roads))
 
@@ -94,28 +100,45 @@ class Junction:
         self._phase_elapsed += dt
         moved: List[object] = []
 
+        # Use Indian grouped-phase scheduling (N-S together, E-W together, etc.)
         if self._current_lane_phase is None or self._should_switch(roads):
             self._current_lane_phase = self._pick_next_lane_phase(roads)
+            self._current_phase_group = self._get_phase_group(self._current_lane_phase, roads)
             self._phase_elapsed = 0.0
 
         if self._current_lane_phase is None:
             return moved
 
-        road_id, lane_index = self._current_lane_phase
-        road = roads.get(road_id)
-        if road is None:
-            return moved
+        # Serve all lanes in the current phase group simultaneously.
+        active_lanes = self._current_phase_group if self._current_phase_group else [self._current_lane_phase]
+        for road_id, lane_index in active_lanes:
+            road = roads.get(road_id)
+            if road is None:
+                continue
+            for _ in range(self.service_rate):
+                vehicle = road.front_vehicle(lane_index)
+                if vehicle is None:
+                    break
+                desired_road_id = vehicle.desired_road_id
+                if desired_road_id is None:
+                    popped = road.pop_front_vehicle(lane_index, current_time)
+                    if popped is None:
+                        break
+                    wait_started = popped._wait_started_at
+                    if wait_started is not None:
+                        self.total_wait_time += current_time - wait_started
+                    popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
+                    moved.append(popped)
+                    self.total_processed += 1
+                    continue
 
-        released = 0
-        while released < self.service_rate:
-            vehicle = road.front_vehicle(lane_index)
-            if vehicle is None:
-                break
+                next_road = roads.get(desired_road_id)
+                if next_road is None:
+                    break
+                target_lane = next_road.best_entry_lane(vehicle.downstream_target_after_next_entry())
+                if target_lane is None:
+                    break
 
-            desired_road_id = vehicle.desired_road_id
-
-        # Vehicle destination is this junction (junction acts as sink)
-            if desired_road_id is None:
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     break
@@ -123,36 +146,56 @@ class Junction:
                 if wait_started is not None:
                     self.total_wait_time += current_time - wait_started
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
+                if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
+                    road._occupancy[lane_index][road.stop_cell] = popped
+                    break
                 moved.append(popped)
-                released += 1
                 self.total_processed += 1
-                continue
-
-            next_road = roads.get(desired_road_id)
-            if next_road is None:
-                break
-
-            target_lane = next_road.best_entry_lane(vehicle.downstream_target_after_next_entry())
-            if target_lane is None:
-                break
-
-            popped = road.pop_front_vehicle(lane_index, current_time)
-            if popped is None:
-                break
-
-            wait_started = popped._wait_started_at
-            if wait_started is not None:
-                self.total_wait_time += current_time - wait_started
-
-            popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
-            if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
-                raise RuntimeError(f"Failed to move vehicle {popped.vehicle_id} across {self.junction_id}")
-            moved.append(popped)
-            released += 1
-            self.total_processed += 1
 
         self.max_queue = max(self.max_queue, self.total_queued(roads))
         return moved
+
+    def _get_phase_group(
+        self,
+        lead_phase: Optional[Tuple[str, int]],
+        roads: Dict[str, object],
+    ) -> List[Tuple[str, int]]:
+        """Return all (road_id, lane) pairs that are on the same axis as lead_phase."""
+        if lead_phase is None:
+            return []
+        lead_road_id, _ = lead_phase
+        lead_road = roads.get(lead_road_id)
+        if lead_road is None:
+            return [lead_phase]
+
+        lead_angle = self._road_bearing(lead_road)
+        group: List[Tuple[str, int]] = []
+        for road_id in self.incoming_roads:
+            road = roads.get(road_id)
+            if road is None:
+                continue
+            angle = self._road_bearing(road)
+            diff = abs((angle - lead_angle + 180) % 360 - 180)
+            if diff <= 45 or diff >= 135:
+                for lane_index in range(road.lanes):
+                    group.append((road_id, lane_index))
+        return group if group else [lead_phase]
+
+    def _road_bearing(self, road) -> float:
+        """Bearing in degrees of the road direction toward this junction."""
+        import math
+
+        jx, jy = self.pos
+        try:
+            fx = getattr(road, "_from_x", None)
+            fy = getattr(road, "_from_y", None)
+            if fx is None or fy is None:
+                return 0.0
+            dx = jx - fx
+            dy = jy - fy
+            return math.degrees(math.atan2(dy, dx)) % 360
+        except Exception:
+            return 0.0
 
     def _step_unsignalized(self, roads: Dict[str, object], current_time: float) -> List[object]:
         moved: List[object] = []
@@ -165,7 +208,6 @@ class Junction:
                 if vehicle is None:
                     continue
                 desired_road_id = vehicle.desired_road_id
-                # Vehicle has arrived at its destination (this junction is the sink)
                 if desired_road_id is None:
                     popped = road.pop_front_vehicle(lane_index, current_time)
                     if popped is not None:
@@ -176,12 +218,14 @@ class Junction:
                         moved.append(popped)
                         self.total_processed += 1
                     continue
+
                 next_road = roads.get(desired_road_id)
                 if next_road is None:
                     continue
                 target_lane = next_road.best_entry_lane(vehicle.downstream_target_after_next_entry())
                 if target_lane is None:
                     continue
+
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     continue
@@ -190,9 +234,11 @@ class Junction:
                     self.total_wait_time += current_time - wait_started
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                 if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
-                    raise RuntimeError(f"Failed unsignalized move for vehicle {popped.vehicle_id} at {self.junction_id}")
+                    road._occupancy[lane_index][road.stop_cell] = popped
+                    continue
                 moved.append(popped)
                 self.total_processed += 1
+
         self.max_queue = max(self.max_queue, self.total_queued(roads))
         return moved
 
@@ -223,6 +269,8 @@ class Junction:
     def _should_switch(self, roads: Dict[str, object]) -> bool:
         if self._current_lane_phase is None:
             return True
+        if self.total_queued(roads) == 0:
+            return False
         queue_length = self._lane_queue_length(roads, self._current_lane_phase)
         min_green = self.default_min_green
         max_green = self._green_duration_for_lane(roads, self._current_lane_phase)
@@ -238,9 +286,15 @@ class Junction:
         if self.signal_algorithm == "fixed":
             return self.default_max_green
         if self.signal_algorithm in {"queue_weighted", "pressure"}:
-            return min(self.default_max_green, max(self.default_min_green, self.default_min_green + queue_length * weight))
+            return min(
+                self.default_max_green,
+                max(self.default_min_green, self.default_min_green + queue_length * weight),
+            )
         if self.signal_algorithm == "wfq_lane":
-            return min(self.default_max_green, max(self.default_min_green, self.default_min_green + (queue_length / max(weight, 0.1)) + weight))
+            return min(
+                self.default_max_green,
+                max(self.default_min_green, self.default_min_green + (queue_length / max(weight, 0.1)) + weight),
+            )
         return self.default_max_green
 
     def _pick_next_lane_phase(self, roads: Dict[str, object]) -> Optional[Tuple[str, int]]:
@@ -260,10 +314,16 @@ class Junction:
                     best_score = score
                     best_phase = lane_phase
             if best_phase is not None:
-                self._lane_deficit[best_phase] = max(0.0, self._lane_deficit[best_phase] - self._lane_weight(roads, best_phase))
+                self._lane_deficit[best_phase] = max(
+                    0.0,
+                    self._lane_deficit[best_phase] - self._lane_weight(roads, best_phase),
+                )
             return best_phase
 
-        return max(phases, key=lambda lane_phase: self._lane_queue_length(roads, lane_phase) * self._lane_weight(roads, lane_phase))
+        return max(
+            phases,
+            key=lambda lane_phase: self._lane_queue_length(roads, lane_phase) * self._lane_weight(roads, lane_phase),
+        )
 
     def __repr__(self) -> str:
         return f"Junction(id={self.junction_id}, phase={self._current_lane_phase}, processed={self.total_processed})"

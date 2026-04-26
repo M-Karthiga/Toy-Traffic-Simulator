@@ -9,16 +9,10 @@
       "y": 175,
       "is_source": true,
       "is_sink": false,
-      "source_rate": 0.1,
+      "source_rate": 0.0,
       "source_mode": "poisson",
-      "destinations": [
-        "J5",
-        "J6"
-      ],
-      "destination_weights": {
-        "J5": 1.0,
-        "J6": 1.0
-      },
+      "destinations": [],
+      "destination_weights": {},
       "signal_algorithm": "wfq_lane",
       "min_green": 4.0,
       "max_green": 12.0,
@@ -33,17 +27,54 @@
       "y": 120,
       "is_source": true,
       "is_sink": true,
-      "source_rate": 0.0,
+      "source_rate": 1.4000000000000001,
       "source_mode": "poisson",
-      "destinations": [],
-      "destination_weights": {},
+      "destinations": [
+        "J4",
+        "J7",
+        "J3"
+      ],
+      "destination_weights": {
+        "J4": 0.2,
+        "J7": 1.1,
+        "J3": 0.1
+      },
       "signal_algorithm": "wfq_lane",
       "min_green": 4.0,
       "max_green": 12.0,
       "service_rate": 1,
       "junction_width": 54,
       "junction_height": 54,
-      "vehicle_types": []
+      "vehicle_types": [
+        {
+          "type_id": 1,
+          "destination": "J4",
+          "flow_rate": 0.2,
+          "weight": 1,
+          "color": "#e53935"
+        },
+        {
+          "type_id": 2,
+          "destination": "J7",
+          "flow_rate": 0.8,
+          "weight": 2,
+          "color": "#43a047"
+        },
+        {
+          "type_id": 3,
+          "destination": "J3",
+          "flow_rate": 0.1,
+          "weight": 4,
+          "color": "#1e88e5"
+        },
+        {
+          "type_id": 4,
+          "destination": "J7",
+          "flow_rate": 0.3,
+          "weight": 5,
+          "color": "#fb8c00"
+        }
+      ]
     },
     {
       "id": "J3",
@@ -68,11 +99,15 @@
       "is_source": false,
       "is_sink": false,
       "signal_algorithm": "wfq_lane",
-      "min_green": 5,
-      "max_green": 14,
+      "min_green": 5.0,
+      "max_green": 14.0,
       "service_rate": 1,
       "junction_width": 64,
-      "junction_height": 64
+      "junction_height": 64,
+      "vehicle_types": [],
+      "destinations": [],
+      "destination_weights": {},
+      "source_rate": 0.0
     },
     {
       "id": "J5",
@@ -86,10 +121,47 @@
       "service_rate": 1,
       "junction_width": 54,
       "junction_height": 54,
-      "source_rate": 0.0,
-      "destinations": [],
-      "destination_weights": {},
-      "vehicle_types": []
+      "source_rate": 1.38,
+      "destinations": [
+        "J6",
+        "J7",
+        "J3"
+      ],
+      "destination_weights": {
+        "J6": 0.6,
+        "J7": 0.08,
+        "J3": 0.7
+      },
+      "vehicle_types": [
+        {
+          "type_id": 1,
+          "destination": "J6",
+          "flow_rate": 0.5,
+          "weight": 1,
+          "color": "#e53935"
+        },
+        {
+          "type_id": 2,
+          "destination": "J6",
+          "flow_rate": 0.1,
+          "weight": 2,
+          "color": "#43a047"
+        },
+        {
+          "type_id": 3,
+          "destination": "J7",
+          "flow_rate": 0.08,
+          "weight": 4,
+          "color": "#1e88e5"
+        },
+        {
+          "type_id": 4,
+          "destination": "J3",
+          "flow_rate": 0.7,
+          "weight": 5,
+          "color": "#fb8c00"
+        }
+      ]
     },
     {
       "id": "J6",
@@ -113,16 +185,17 @@
       "y": 454,
       "is_source": false,
       "is_sink": false,
-      "source_rate": 0.25,
+      "source_rate": 0.0,
       "source_mode": "poisson",
       "destinations": [],
       "destination_weights": {},
       "signal_algorithm": "wfq_lane",
-      "min_green": 4,
-      "max_green": 12,
+      "min_green": 4.0,
+      "max_green": 12.0,
       "service_rate": 1,
       "junction_width": 60,
-      "junction_height": 60
+      "junction_height": 60,
+      "vehicle_types": []
     },
     {
       "id": "J8",
@@ -130,16 +203,17 @@
       "y": 336,
       "is_source": false,
       "is_sink": false,
-      "source_rate": 0.25,
+      "source_rate": 0.0,
       "source_mode": "poisson",
       "destinations": [],
       "destination_weights": {},
       "signal_algorithm": "wfq_lane",
-      "min_green": 4,
-      "max_green": 12,
+      "min_green": 4.0,
+      "max_green": 12.0,
       "service_rate": 1,
       "junction_width": 60,
-      "junction_height": 60
+      "junction_height": 60,
+      "vehicle_types": []
     }
   ],
   "roads": [

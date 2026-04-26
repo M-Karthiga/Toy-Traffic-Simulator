@@ -72,8 +72,12 @@ class SimulationEngine:
             if to_id in self.junctions:
                 self.junctions[to_id].add_incoming_road(road.road_id)
 
+            # Annotate road with from-node position so Junction can compute bearing
+            fx, fy = self._node_position(from_id)
+            road._from_x = fx
+            road._from_y = fy
+
         node_ids = list(self.sources) + list(self.junctions) + list(self.sinks)
-        # Deduplicate: a junction-source-sink node appears in multiple lists
         node_ids = list(dict.fromkeys(node_ids))
         self.router.build_from_network(self.roads, node_ids)
         self._built = True

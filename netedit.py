@@ -532,37 +532,62 @@ class NetworkEditor:
 
     def _build_road_form(self) -> None:
         self.road_form = tk.Frame(self.form, bg="#ded5c4")
-        self.road_id_var = tk.StringVar()
-        self.road_from_var = tk.StringVar()
-        self.road_to_var = tk.StringVar()
+        self.road_id_var     = tk.StringVar()
+        self.road_from_var   = tk.StringVar()
+        self.road_to_var     = tk.StringVar()
         self.road_length_var = tk.StringVar(value="120")
-        self.road_speed_var = tk.StringVar(value="12")
-        self.road_lanes_var = tk.StringVar(value="2")
-        self.road_lane_dirs_var = tk.StringVar(value="*")
-        self.road_lane_flows_var = tk.StringVar(value="1.0")
+        self.road_speed_var  = tk.StringVar(value="12")
+        # Lane type: human-friendly choice; maps to lanes-per-direction count
+        self.road_lane_type_var = tk.StringVar(value="2-lane (1+1)")
 
-        for label_text, variable in [
-            ("Road Id", self.road_id_var),
-            ("From", self.road_from_var),
-            ("To", self.road_to_var),
-            ("Length", self.road_length_var),
-            ("Speed Limit", self.road_speed_var),
-            ("Lanes Per Dir", self.road_lanes_var),
-            ("Lane Directions", self.road_lane_dirs_var),
-            ("Lane Flow Weights", self.road_lane_flows_var),
-        ]:
-            tk.Label(self.road_form, text=label_text, bg="#ded5c4").pack(anchor="w", padx=6)
-            tk.Entry(self.road_form, textvariable=variable).pack(fill=tk.X, padx=6, pady=(0, 6))
+        p = 6
+        bg = "#ded5c4"
 
-        tk.Label(
-            self.road_form,
-            text="Lane Directions format: lane1=R3|R4 ; lane2=R3",
-            justify=tk.LEFT,
-            bg="#ded5c4",
-            wraplength=320,
-        ).pack(anchor="w", padx=6, pady=(0, 8))
-        road_btn_frame = tk.Frame(self.road_form, bg="#ded5c4")
-        road_btn_frame.pack(fill=tk.X, padx=6, pady=4)
+        # Road ID (read-only display)
+        tk.Label(self.road_form, text="Road ID", bg=bg, font=("Arial", 9, "bold")).pack(anchor="w", padx=p)
+        tk.Entry(self.road_form, textvariable=self.road_id_var, state="readonly",
+                 readonlybackground="#e8e0d0").pack(fill=tk.X, padx=p, pady=(0, 6))
+
+        # From / To (read-only)
+        row_ft = tk.Frame(self.road_form, bg=bg)
+        row_ft.pack(fill=tk.X, padx=p, pady=(0, 6))
+        for lbl, var in [("From", self.road_from_var), ("To", self.road_to_var)]:
+            col = tk.Frame(row_ft, bg=bg)
+            col.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 4))
+            tk.Label(col, text=lbl, bg=bg, font=("Arial", 9, "bold")).pack(anchor="w")
+            tk.Entry(col, textvariable=var, state="readonly",
+                     readonlybackground="#e8e0d0", width=8).pack(fill=tk.X)
+
+        # Lane configuration dropdown
+        tk.Label(self.road_form, text="Lane Configuration", bg=bg, font=("Arial", 9, "bold")).pack(anchor="w", padx=p)
+        LANE_OPTIONS = [
+            "1-lane (one-way)",
+            "2-lane (1+1)",
+            "4-lane (2+2)",
+            "8-lane (4+4)",
+        ]
+        lane_menu = tk.OptionMenu(self.road_form, self.road_lane_type_var, *LANE_OPTIONS)
+        lane_menu.config(bg="#f5f0e8", anchor="w")
+        lane_menu.pack(fill=tk.X, padx=p, pady=(0, 4))
+
+        tk.Label(self.road_form,
+                 text="India rule: vehicles keep LEFT.\n"
+                      "Each direction gets equal lanes.\n"
+                      "Lane directions are set automatically.",
+                 bg=bg, fg="#665544", font=("Arial", 8), justify=tk.LEFT,
+                 wraplength=310).pack(anchor="w", padx=p, pady=(0, 8))
+
+        # Speed limit
+        tk.Label(self.road_form, text="Speed Limit (m/s)", bg=bg, font=("Arial", 9, "bold")).pack(anchor="w", padx=p)
+        tk.Entry(self.road_form, textvariable=self.road_speed_var).pack(fill=tk.X, padx=p, pady=(0, 6))
+
+        # Length (read-only, auto-computed from node positions)
+        tk.Label(self.road_form, text="Length (m)  — auto from positions", bg=bg, font=("Arial", 8)).pack(anchor="w", padx=p)
+        tk.Entry(self.road_form, textvariable=self.road_length_var, state="readonly",
+                 readonlybackground="#e8e0d0").pack(fill=tk.X, padx=p, pady=(0, 10))
+
+        road_btn_frame = tk.Frame(self.road_form, bg=bg)
+        road_btn_frame.pack(fill=tk.X, padx=p, pady=4)
         tk.Button(road_btn_frame, text="✔  Apply Road", command=self._apply_road_form,
                   bg="#3a7a3a", fg="white", font=("Arial", 10, "bold")).pack(fill=tk.X, pady=(0, 4))
         tk.Button(road_btn_frame, text="🗑  Delete Road", command=self._delete_selected,
@@ -761,6 +786,12 @@ class NetworkEditor:
         self.status.set(f"Added bidirectional corridor {corridor_id}")
 
     def _select_object(self, kind: str, object_id: str) -> None:
+        # Auto-save current node form before switching away, so data is never lost
+        if self.selected_kind == "node" and self.selected_id is not None:
+            try:
+                self._apply_node_form()
+            except Exception:
+                pass
         self.selected_kind = kind
         self.selected_id = object_id
         self._load_selection_into_form()
@@ -812,15 +843,19 @@ class NetworkEditor:
 
         if self.selected_kind == "road" and self.selected_id is not None:
             road = self._find_road(self.selected_id)
-            self.object_name.set(f"Road {road['id']}")
+            # Show the corridor partner label if this is one side of a corridor
+            corridor_id = road.get("corridor_id", "")
+            display_id = f"{road['id']}  [{corridor_id}]" if corridor_id else road["id"]
+            self.object_name.set(f"Road  {display_id}")
             self.road_id_var.set(road["id"])
             self.road_from_var.set(road["from"])
             self.road_to_var.set(road["to"])
             self.road_length_var.set(str(road.get("length", 120)))
             self.road_speed_var.set(str(road.get("speed_limit", 12)))
-            self.road_lanes_var.set(str(road.get("lanes", 1)))
-            self.road_lane_dirs_var.set(_lane_directions_to_text(road.get("lane_directions", [["*"]])))
-            self.road_lane_flows_var.set(", ".join(str(v) for v in road.get("lane_flow_weights", [1.0])))
+            # Map lanes-per-direction to human label
+            lanes = road.get("lanes", 2)
+            mapping = {1: "1-lane (one-way)", 2: "2-lane (1+1)", 4: "4-lane (2+2)", 8: "8-lane (4+4)"}
+            self.road_lane_type_var.set(mapping.get(lanes, "2-lane (1+1)"))
             self._show_form("road")
             return
 
@@ -914,27 +949,34 @@ class NetworkEditor:
         if self.selected_kind != "road" or self.selected_id is None:
             return
         road = self._find_road(self.selected_id)
-        road["id"] = self.road_id_var.get().strip() or road["id"]
-        road["from"] = self.road_from_var.get().strip() or road["from"]
-        road["to"] = self.road_to_var.get().strip() or road["to"]
-        road["length"] = max(40, _safe_int(self.road_length_var.get(), 120))
-        road["speed_limit"] = max(1.0, _safe_float(self.road_speed_var.get(), 12.0))
-        road["lanes"] = max(1, _safe_int(self.road_lanes_var.get(), 2))
-        road["lane_directions"] = _text_to_lane_directions(self.road_lane_dirs_var.get(), road["lanes"])
-        road["lane_flow_weights"] = _text_to_float_list(self.road_lane_flows_var.get(), road["lanes"])
+        speed = max(1.0, _safe_float(self.road_speed_var.get(), 12.0))
+        label = self.road_lane_type_var.get()
+        lanes_map = {
+            "1-lane (one-way)": 1,
+            "2-lane (1+1)": 2,
+            "4-lane (2+2)": 4,
+            "8-lane (4+4)": 8,
+        }
+        lanes_per_dir = lanes_map.get(label, 2)
+
+        # Apply to this road
+        road["speed_limit"] = speed
+        road["lanes"] = lanes_per_dir
+        road["lane_directions"] = [["*"] for _ in range(lanes_per_dir)]
+        road["lane_flow_weights"] = [1.0] * lanes_per_dir
+
+        # Mirror same lanes/speed to the corridor partner (opposite direction)
         corridor_id = road.get("corridor_id")
         if corridor_id:
-            siblings = [candidate for candidate in self.network["roads"] if candidate.get("corridor_id") == corridor_id and candidate["id"] != road["id"]]
-            for sibling in siblings:
-                sibling["length"] = road["length"]
-                sibling["speed_limit"] = road["speed_limit"]
-                sibling["lanes"] = road["lanes"]
-                while len(sibling.get("lane_directions", [])) < road["lanes"]:
-                    sibling.setdefault("lane_directions", []).append(["*"])
-                sibling["lane_directions"] = sibling["lane_directions"][: road["lanes"]]
-                sibling["lane_flow_weights"] = (sibling.get("lane_flow_weights", []) + [1.0] * road["lanes"])[: road["lanes"]]
+            for sibling in self.network["roads"]:
+                if sibling.get("corridor_id") == corridor_id and sibling["id"] != road["id"]:
+                    sibling["speed_limit"] = speed
+                    sibling["lanes"] = lanes_per_dir
+                    sibling["lane_directions"] = [["*"] for _ in range(lanes_per_dir)]
+                    sibling["lane_flow_weights"] = [1.0] * lanes_per_dir
+
         self.selected_id = road["id"]
-        self.status.set(f"Updated road {road['id']}")
+        self.status.set(f"Updated road {road['id']}  ({lanes_per_dir} lanes/dir, {speed} m/s)")
         self._redraw()
 
     def _delete_selected(self) -> None:
