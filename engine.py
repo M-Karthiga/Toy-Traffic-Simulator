@@ -56,6 +56,7 @@ class SimulationEngine:
         self.sinks[sink.sink_id] = sink
 
     def build(self) -> None:
+        node_positions = {}
         for road in self.roads.values():
             from_id = road.from_node
             to_id = road.to_node
@@ -79,7 +80,9 @@ class SimulationEngine:
 
         node_ids = list(self.sources) + list(self.junctions) + list(self.sinks)
         node_ids = list(dict.fromkeys(node_ids))
-        self.router.build_from_network(self.roads, node_ids)
+        for node_id in node_ids:
+            node_positions[node_id] = self._node_position(node_id)
+        self.router.build_from_network(self.roads, node_ids, node_positions=node_positions)
         self._built = True
         
     def run(
@@ -140,6 +143,7 @@ class SimulationEngine:
                     destination_id=destination_id,
                     route_nodes=route_nodes,
                     route_roads=route_roads,
+                    turn_plan=self._build_turn_plan(route_nodes, route_roads),
                     type_id=type_id,
                     weight=weight,
                     color_override=color_override,
@@ -262,40 +266,50 @@ class SimulationEngine:
     def statistics(self) -> dict:
         arrived_travel_times = [vehicle.travel_time for vehicle in self._vehicles_arrived if vehicle.travel_time is not None]
         all_wait_times = [vehicle.total_wait_time for vehicle in self._vehicles_all]
+        road_stats = {
+            road_id: {
+                "from": road.from_node,
+                "to": road.to_node,
+                "utilisation": road.utilisation(),
+                "avg_travel_time_s": road.avg_travel_time(),
+                "entered": road.total_vehicles_entered,
+                "exited": road.total_vehicles_exited,
+                "max_occupancy": road.max_occupancy,
+            }
+            for road_id, road in self.roads.items()
+        }
+        junction_stats = {
+            junction_id: {
+                "processed": junction.total_processed,
+                "avg_wait_time_s": junction.avg_wait_time(),
+                "max_queue": junction.max_queue,
+                "current_queue": junction.total_queued(self.roads),
+                "green_incoming": junction.current_green,
+                "phases": junction.phases,
+                "algorithm": junction.signal_algorithm,
+            }
+            for junction_id, junction in self.junctions.items()
+        }
+        sink_stats = {
+            sink_id: {
+                "arrived": sink.total_arrived,
+                "avg_travel_time_s": sink.avg_travel_time(),
+            }
+            for sink_id, sink in self.sinks.items()
+        }
 
         return {
             "simulation_time": self.time,
             "total_vehicles": len(self._vehicles_all),
+            "total_vehicles_created": len(self._vehicles_all),
             "active_vehicles": len(self._vehicles_active),
             "arrived_vehicles": len(self._vehicles_arrived),
             "max_active_vehicles": self.max_active_vehicles,
             "avg_travel_time_s": sum(arrived_travel_times) / len(arrived_travel_times) if arrived_travel_times else 0.0,
             "avg_wait_time_s": sum(all_wait_times) / len(all_wait_times) if all_wait_times else 0.0,
             "throughput_veh_per_s": (len(self._vehicles_arrived) / self.time) if self.time else 0.0,
-            "roads": {
-                road_id: {
-                    "from": road.from_node,
-                    "to": road.to_node,
-                    "utilisation": road.utilisation(),
-                    "avg_travel_time_s": road.avg_travel_time(),
-                    "entered": road.total_vehicles_entered,
-                    "exited": road.total_vehicles_exited,
-                    "max_occupancy": road.max_occupancy,
-                }
-                for road_id, road in self.roads.items()
-            },
-            "junctions": {
-                junction_id: {
-                    "processed": junction.total_processed,
-                    "avg_wait_time_s": junction.avg_wait_time(),
-                    "max_queue": junction.max_queue,
-                    "current_queue": junction.total_queued(self.roads),
-                    "green_incoming": junction.current_green,
-                    "phases": junction.phases,
-                    "algorithm": junction.signal_algorithm,
-                }
-                for junction_id, junction in self.junctions.items()
-            },
+            "roads": road_stats,
+            "junctions": junction_stats,
             "sources": {
                 source_id: {
                     "generated": source.total_generated,
@@ -304,14 +318,19 @@ class SimulationEngine:
                 }
                 for source_id, source in self.sources.items()
             },
-            "sinks": {
-                sink_id: {
-                    "arrived": sink.total_arrived,
-                    "avg_travel_time_s": sink.avg_travel_time(),
-                }
-                for sink_id, sink in self.sinks.items()
-            },
+            "sinks": sink_stats,
+            "per_road_utilisation": {road_id: data["utilisation"] for road_id, data in road_stats.items()},
+            "per_road_counts": {road_id: {"entered": data["entered"], "exited": data["exited"]} for road_id, data in road_stats.items()},
+            "per_junction_processed": {junction_id: data["processed"] for junction_id, data in junction_stats.items()},
+            "per_junction_queue_size": {junction_id: data["current_queue"] for junction_id, data in junction_stats.items()},
+            "per_sink_arrivals": {sink_id: data["arrived"] for sink_id, data in sink_stats.items()},
         }
+
+    def _build_turn_plan(self, route_nodes: List[str], route_roads: List[str]) -> List[str]:
+        plan: List[str] = []
+        for route_cursor in range(len(route_roads)):
+            plan.append(self.router.get_turn_for_vehicle(route_nodes, route_cursor))
+        return plan
 
 
 def _angle_between(start: tuple, end: tuple) -> float:

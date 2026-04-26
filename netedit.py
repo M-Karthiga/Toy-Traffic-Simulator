@@ -261,9 +261,23 @@ def load_network_definition(path: str) -> dict:
 
 
 def apply_network_to_engine(engine, network_data: dict) -> None:
+    sink_ids = {
+        node["id"]
+        for node in network_data.get("nodes", [])
+        if node.get("is_sink") or node.get("kind") == "sink"
+    }
     for node in network_data.get("nodes", []):
         pos = (node["x"], node["y"])
         node_id = node["id"]
+        is_source = node.get("is_source") or node.get("kind") == "source"
+        is_sink = node.get("is_sink") or node.get("kind") == "sink"
+        raw_vehicle_types = list(node.get("vehicle_types", []))
+        valid_vehicle_types = [vt for vt in raw_vehicle_types if vt.get("destination") in sink_ids and vt.get("destination") != node_id]
+        valid_destinations = [dest for dest in node.get("destinations", []) if dest in sink_ids and dest != node_id]
+        valid_destination_weights = {
+            dest: weight for dest, weight in node.get("destination_weights", {}).items()
+            if dest in sink_ids and dest != node_id
+        }
         engine.add_junction(
             Junction(
                 junction_id=node_id,
@@ -278,20 +292,20 @@ def apply_network_to_engine(engine, network_data: dict) -> None:
                 junction_height=node.get("junction_height", 58),
             )
         )
-        if node.get("is_source") or node.get("kind") == "source":
+        if is_source:
             engine.add_source(
                 Source(
                     source_id=node_id,
                     pos=pos,
                     rate=node.get("source_rate", node.get("rate", 0.25)),
                     mode=node.get("source_mode", node.get("mode", "poisson")),
-                    destinations=node.get("destinations", []),
-                    destination_weights=node.get("destination_weights", {}),
-                    vehicle_types=node.get("vehicle_types", []),  
+                    destinations=valid_destinations,
+                    destination_weights=valid_destination_weights,
+                    vehicle_types=valid_vehicle_types,
                 )
             
             )
-        if node.get("is_sink") or node.get("kind") == "sink":
+        if is_sink:
             engine.add_sink(Sink(sink_id=node_id, pos=pos))
 
     for road in network_data.get("roads", []):
@@ -504,8 +518,10 @@ class NetworkEditor:
 
         # ── Advanced tab ─────────────────────────────────────────────
         adv = self._adv_tab
-        tk.Label(adv, text="Signal Algorithm", bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6, pady=(6, 0))
-        algo_menu = tk.OptionMenu(adv, self.node_signal_algo_var,
+        self.signal_controls_frame = tk.Frame(adv, bg="#ded5c4")
+        self.signal_controls_frame.pack(fill=tk.X, padx=0, pady=0)
+        tk.Label(self.signal_controls_frame, text="Signal Algorithm", bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6, pady=(6, 0))
+        algo_menu = tk.OptionMenu(self.signal_controls_frame, self.node_signal_algo_var,
                                   "wfq_lane", "fixed", "queue_weighted", "pressure")
         algo_menu.config(bg="#f5f0e8")
         algo_menu.pack(fill=tk.X, padx=6, pady=(0, 4))
@@ -513,12 +529,21 @@ class NetworkEditor:
         for label_text, var in [("Min Green (s)", self.node_min_green_var),
                                   ("Max Green (s)", self.node_max_green_var),
                                   ("Service Rate", self.node_service_var)]:
-            tk.Label(adv, text=label_text, bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6)
-            tk.Entry(adv, textvariable=var).pack(fill=tk.X, padx=6, pady=(0, 4))
+            tk.Label(self.signal_controls_frame, text=label_text, bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6)
+            tk.Entry(self.signal_controls_frame, textvariable=var).pack(fill=tk.X, padx=6, pady=(0, 4))
 
-        tk.Label(adv, text="(Min/Max Green apply only to signalized junctions\nwith 2+ incoming roads)",
+        tk.Label(self.signal_controls_frame, text="(Min/Max Green apply only to signalized junctions\nwith 2+ incoming roads)",
                  bg="#ded5c4", fg="#665544", font=("Arial", 8), justify=tk.LEFT,
                  wraplength=300).pack(anchor="w", padx=6, pady=(0, 8))
+        self.signal_disabled_msg = tk.Label(
+            adv,
+            text="Signal settings are not used for source/sink junctions.",
+            bg="#ded5c4",
+            fg="#665544",
+            font=("Arial", 9, "italic"),
+            justify=tk.LEFT,
+            wraplength=300,
+        )
 
         # ── Action buttons ───────────────────────────────────────────
         btn_frame = tk.Frame(self.node_form, bg="#ded5c4")
@@ -561,7 +586,6 @@ class NetworkEditor:
         # Lane configuration dropdown
         tk.Label(self.road_form, text="Lane Configuration", bg=bg, font=("Arial", 9, "bold")).pack(anchor="w", padx=p)
         LANE_OPTIONS = [
-            "1-lane (one-way)",
             "2-lane (1+1)",
             "4-lane (2+2)",
             "8-lane (4+4)",
@@ -605,18 +629,26 @@ class NetworkEditor:
                     self._nb.select(1)
             except Exception:
                 pass
+        self._refresh_signal_controls()
+        self._refresh_dest_dropdowns(self.node_id_var.get().strip() or self.selected_id or "")
         self._refresh_source_rate_display()
 
     def _refresh_source_rate_display(self) -> None:
         total = 0.0
-        for row in self._vtype_rows:
-            total += _safe_float(row["flow"].get(), 0.0)
+        if self.node_source_var.get():
+            for row in self._vtype_rows:
+                total += _safe_float(row["flow"].get(), 0.0)
         self.node_source_rate_var.set(f"{total:.3f}")
 
     def _get_possible_destinations(self, exclude_id: str) -> List[str]:
-        """Return all node IDs that could serve as destinations from a given source."""
-        return [n["id"] for n in self.network["nodes"]
-                if n["id"] != exclude_id and not n.get("is_source", False)]
+        """Return sink junction IDs available as destinations for a source."""
+        return sorted(
+            [
+                n["id"]
+                for n in self.network["nodes"]
+                if n["id"] != exclude_id and n.get("is_sink", False)
+            ]
+        )
 
     def _refresh_dest_dropdowns(self, current_node_id: str) -> None:
         """Repopulate destination OptionMenus with nodes reachable from current_node_id."""
@@ -629,6 +661,21 @@ class NetworkEditor:
             menu.add_command(label="(none)", command=lambda v=row["dest"]: v.set(""))
             for c in choices:
                 menu.add_command(label=c, command=lambda v=row["dest"], val=c: v.set(val))
+            if row["dest"].get() not in choices:
+                row["dest"].set("")
+
+    def _refresh_signal_controls(self) -> None:
+        show_signals = not (self.node_source_var.get() or self.node_sink_var.get())
+        if show_signals:
+            if not self.signal_controls_frame.winfo_ismapped():
+                self.signal_controls_frame.pack(fill=tk.X, padx=0, pady=0)
+            if self.signal_disabled_msg.winfo_ismapped():
+                self.signal_disabled_msg.pack_forget()
+        else:
+            if self.signal_controls_frame.winfo_ismapped():
+                self.signal_controls_frame.pack_forget()
+            if not self.signal_disabled_msg.winfo_ismapped():
+                self.signal_disabled_msg.pack(fill=tk.X, padx=6, pady=(8, 8))
 
 
     def _bind_canvas(self) -> None:
@@ -757,7 +804,7 @@ class NetworkEditor:
         end = self._find_node(to_id)
         corridor_number = self._next_corridor_number()
         corridor_id = f"C{corridor_number}"
-        lane_count = 2
+        lane_count = 1
         length = int(round(math.hypot(end["x"] - start["x"], end["y"] - start["y"])))
         road_a = {
             "id": f"R{corridor_number}A",
@@ -827,6 +874,7 @@ class NetworkEditor:
                     row_vars["weight"].set(str(vt_idx + 1))
 
             self._refresh_source_rate_display()
+            self._refresh_signal_controls()
 
             # Show/hide vehicle types tab based on source role
             if self._nb is not None:
@@ -854,7 +902,7 @@ class NetworkEditor:
             self.road_speed_var.set(str(road.get("speed_limit", 12)))
             # Map lanes-per-direction to human label
             lanes = road.get("lanes", 2)
-            mapping = {1: "1-lane (one-way)", 2: "2-lane (1+1)", 4: "4-lane (2+2)", 8: "8-lane (4+4)"}
+            mapping = {1: "2-lane (1+1)", 2: "4-lane (2+2)", 4: "8-lane (4+4)"}
             self.road_lane_type_var.set(mapping.get(lanes, "2-lane (1+1)"))
             self._show_form("road")
             return
@@ -900,8 +948,10 @@ class NetworkEditor:
                         vt["destination"] = new_id
 
         node["id"] = new_id
-        node["is_source"] = bool(self.node_source_var.get())
-        node["is_sink"] = bool(self.node_sink_var.get())
+        is_source = bool(self.node_source_var.get())
+        is_sink = bool(self.node_sink_var.get())
+        node["is_source"] = is_source
+        node["is_sink"] = is_sink
         # Both source and sink allowed (pass-through node) — no forced reset
 
         node["signal_algorithm"] = self.node_signal_algo_var.get().strip() or "wfq_lane"
@@ -918,11 +968,12 @@ class NetworkEditor:
         destinations = []
         destination_weights = {}
         total_rate = 0.0
+        allowed_destinations = set(self._get_possible_destinations(new_id))
         for vt_idx, row_vars in enumerate(self._vtype_rows):
             dest = row_vars["dest"].get().strip()
             flow = _safe_float(row_vars["flow"].get(), 0.0)
             wt   = max(1, min(5, _safe_int(row_vars["weight"].get(), vt_idx + 1)))
-            if dest and flow > 0:
+            if is_source and dest in allowed_destinations and flow > 0:
                 vtypes.append({
                     "type_id": vt_idx + 1,
                     "destination": dest,
@@ -938,7 +989,7 @@ class NetworkEditor:
         node["vehicle_types"] = vtypes
         node["destinations"] = destinations
         node["destination_weights"] = destination_weights
-        node["source_rate"] = total_rate
+        node["source_rate"] = total_rate if is_source else 0.0
         self.node_source_rate_var.set(f"{total_rate:.3f}")
 
         self.selected_id = node["id"]
@@ -952,12 +1003,11 @@ class NetworkEditor:
         speed = max(1.0, _safe_float(self.road_speed_var.get(), 12.0))
         label = self.road_lane_type_var.get()
         lanes_map = {
-            "1-lane (one-way)": 1,
-            "2-lane (1+1)": 2,
-            "4-lane (2+2)": 4,
-            "8-lane (4+4)": 8,
+            "2-lane (1+1)": 1,
+            "4-lane (2+2)": 2,
+            "8-lane (4+4)": 4,
         }
-        lanes_per_dir = lanes_map.get(label, 2)
+        lanes_per_dir = lanes_map.get(label, 1)
 
         # Apply to this road
         road["speed_limit"] = speed

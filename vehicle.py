@@ -18,6 +18,7 @@ class Vehicle:
     destination_id: str
     route_nodes: List[str]
     route_roads: List[str]
+    turn_plan: List[str] = field(default_factory=list)
     vehicle_id: int = field(default_factory=lambda: next(_vehicle_ids))
 
     state: str = "queued_at_source"
@@ -79,6 +80,10 @@ class Vehicle:
         self.road_entry_time = current_time
         self.state = "on_road"
         self.desired_road_id = self.peek_next_road()
+        if 0 <= self.route_cursor < len(self.turn_plan):
+            self.next_turn = self.turn_plan[self.route_cursor]
+        else:
+            self.next_turn = "straight"
 
     def advance_within_road(self, lane_index: int, cell_index: int) -> None:
         self.current_lane = lane_index

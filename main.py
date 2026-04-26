@@ -69,6 +69,7 @@ def main() -> None:
     stats = engine.statistics()
     stats_path = output_dir / "stats.json"
     stats_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
+    (output_dir / "stats_summary.md").write_text(_stats_markdown(stats), encoding="utf-8")
 
     visualiser = Visualiser(engine, output=str(output_dir / "simulation.gif"), fps=args.fps)
     try:
@@ -86,6 +87,37 @@ def main() -> None:
     print(f"Avg wait time    : {stats['avg_wait_time_s']:.2f}s")
     print(f"Throughput       : {stats['throughput_veh_per_s']:.3f} veh/s")
     print(f"Outputs          : {output_dir.resolve()}")
+
+
+def _stats_markdown(stats: dict) -> str:
+    lines = [
+        "# Simulation Summary",
+        "",
+        f"- Total vehicles created: {stats.get('total_vehicles_created', stats.get('total_vehicles', 0))}",
+        f"- Active vehicles: {stats.get('active_vehicles', 0)}",
+        f"- Arrived vehicles: {stats.get('arrived_vehicles', 0)}",
+        f"- Average travel time: {stats.get('avg_travel_time_s', 0.0):.2f} s",
+        f"- Average wait time: {stats.get('avg_wait_time_s', 0.0):.2f} s",
+        f"- Throughput: {stats.get('throughput_veh_per_s', 0.0):.3f} veh/s",
+        "",
+        "## Per-road Utilisation",
+        "",
+    ]
+    for road_id, value in sorted(stats.get("per_road_utilisation", {}).items()):
+        counts = stats.get("per_road_counts", {}).get(road_id, {})
+        lines.append(f"- {road_id}: utilisation={value:.3f}, entered={counts.get('entered', 0)}, exited={counts.get('exited', 0)}")
+    lines.extend(["", "## Per-junction Queues / Processed", ""])
+    junction_processed = stats.get("per_junction_processed", {})
+    junction_queue = stats.get("per_junction_queue_size", {})
+    for junction_id in sorted(junction_processed):
+        lines.append(
+            f"- {junction_id}: processed={junction_processed.get(junction_id, 0)}, queue={junction_queue.get(junction_id, 0)}"
+        )
+    lines.extend(["", "## Per-sink Arrivals", ""])
+    for sink_id, arrivals in sorted(stats.get("per_sink_arrivals", {}).items()):
+        lines.append(f"- {sink_id}: arrived={arrivals}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
