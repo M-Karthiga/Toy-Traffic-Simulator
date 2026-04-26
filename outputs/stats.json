@@ -1,0 +1,198 @@
+{
+  "simulation_time": 180.0,
+  "total_vehicles": 27,
+  "active_vehicles": 16,
+  "arrived_vehicles": 11,
+  "max_active_vehicles": 16,
+  "avg_travel_time_s": 73.0,
+  "avg_wait_time_s": 0.07407407407407407,
+  "throughput_veh_per_s": 0.06111111111111111,
+  "roads": {
+    "R1A": {
+      "from": "J1",
+      "to": "J3",
+      "utilisation": 0.1111111111111111,
+      "avg_travel_time_s": 34.285714285714285,
+      "entered": 20,
+      "exited": 14,
+      "max_occupancy": 7
+    },
+    "R1B": {
+      "from": "J3",
+      "to": "J1",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R2A": {
+      "from": "J2",
+      "to": "J3",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 22.0,
+      "entered": 1,
+      "exited": 1,
+      "max_occupancy": 1
+    },
+    "R2B": {
+      "from": "J3",
+      "to": "J2",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R3A": {
+      "from": "J3",
+      "to": "J5",
+      "utilisation": 0.016666666666666666,
+      "avg_travel_time_s": 32.142857142857146,
+      "entered": 8,
+      "exited": 7,
+      "max_occupancy": 4
+    },
+    "R3B": {
+      "from": "J5",
+      "to": "J3",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R4A": {
+      "from": "J3",
+      "to": "J4",
+      "utilisation": 0.0625,
+      "avg_travel_time_s": 19.2,
+      "entered": 7,
+      "exited": 5,
+      "max_occupancy": 3
+    },
+    "R4B": {
+      "from": "J4",
+      "to": "J3",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R6A": {
+      "from": "J4",
+      "to": "J6",
+      "utilisation": 0.016666666666666666,
+      "avg_travel_time_s": 32.5,
+      "entered": 5,
+      "exited": 4,
+      "max_occupancy": 3
+    },
+    "R6B": {
+      "from": "J6",
+      "to": "J4",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R7A": {
+      "from": "J1",
+      "to": "J2",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R7B": {
+      "from": "J2",
+      "to": "J1",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    }
+  },
+  "junctions": {
+    "J1": {
+      "processed": 0,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 0,
+      "current_queue": 0,
+      "green_incoming": "R1B",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J2": {
+      "processed": 0,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 0,
+      "current_queue": 0,
+      "green_incoming": "R2B",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J3": {
+      "processed": 15,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 7,
+      "current_queue": 6,
+      "green_incoming": "R1A",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J4": {
+      "processed": 5,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 3,
+      "current_queue": 2,
+      "green_incoming": "R4A",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J5": {
+      "processed": 0,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 4,
+      "current_queue": 1,
+      "green_incoming": null,
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J6": {
+      "processed": 0,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 3,
+      "current_queue": 1,
+      "green_incoming": null,
+      "phases": [],
+      "algorithm": "wfq_lane"
+    }
+  },
+  "sources": {
+    "J1": {
+      "generated": 20,
+      "released": 20,
+      "pending": 0
+    },
+    "J2": {
+      "generated": 7,
+      "released": 1,
+      "pending": 6
+    }
+  },
+  "sinks": {
+    "J5": {
+      "arrived": 7,
+      "avg_travel_time_s": 64.57142857142857
+    },
+    "J6": {
+      "arrived": 4,
+      "avg_travel_time_s": 87.75
+    }
+  }
+}

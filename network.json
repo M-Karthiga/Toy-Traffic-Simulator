@@ -1,0 +1,373 @@
+{
+  "meta": {
+    "name": "junction-role-demo"
+  },
+  "nodes": [
+    {
+      "id": "J1",
+      "x": 120,
+      "y": 240,
+      "is_source": true,
+      "is_sink": false,
+      "source_rate": 0.1,
+      "source_mode": "poisson",
+      "destinations": [
+        "J5",
+        "J6"
+      ],
+      "destination_weights": {
+        "J5": 1.0,
+        "J6": 1.0
+      },
+      "signal_algorithm": "wfq_lane",
+      "min_green": 4.0,
+      "max_green": 12.0,
+      "service_rate": 1,
+      "junction_width": 54,
+      "junction_height": 54
+    },
+    {
+      "id": "J2",
+      "x": 320,
+      "y": 120,
+      "is_source": true,
+      "is_sink": false,
+      "source_rate": 0.05,
+      "source_mode": "poisson",
+      "destinations": [
+        "J5",
+        "J6",
+        "J1"
+      ],
+      "destination_weights": {
+        "J5": 2.0,
+        "J6": 1.0,
+        "J1": 1.0
+      },
+      "signal_algorithm": "wfq_lane",
+      "min_green": 4.0,
+      "max_green": 12.0,
+      "service_rate": 1,
+      "junction_width": 54,
+      "junction_height": 54
+    },
+    {
+      "id": "J3",
+      "x": 320,
+      "y": 240,
+      "is_source": false,
+      "is_sink": false,
+      "signal_algorithm": "wfq_lane",
+      "min_green": 5.0,
+      "max_green": 14.0,
+      "service_rate": 1,
+      "junction_width": 64,
+      "junction_height": 64,
+      "source_rate": 15.0,
+      "destinations": [],
+      "destination_weights": {}
+    },
+    {
+      "id": "J4",
+      "x": 320,
+      "y": 360,
+      "is_source": false,
+      "is_sink": false,
+      "signal_algorithm": "wfq_lane",
+      "min_green": 5,
+      "max_green": 14,
+      "service_rate": 1,
+      "junction_width": 64,
+      "junction_height": 64
+    },
+    {
+      "id": "J5",
+      "x": 540,
+      "y": 240,
+      "is_source": false,
+      "is_sink": true,
+      "signal_algorithm": "wfq_lane",
+      "min_green": 4.0,
+      "max_green": 10.0,
+      "service_rate": 1,
+      "junction_width": 54,
+      "junction_height": 54,
+      "source_rate": 0.15,
+      "destinations": [],
+      "destination_weights": {}
+    },
+    {
+      "id": "J6",
+      "x": 540,
+      "y": 420,
+      "is_source": false,
+      "is_sink": true,
+      "signal_algorithm": "wfq_lane",
+      "min_green": 4.0,
+      "max_green": 10.0,
+      "service_rate": 1,
+      "junction_width": 54,
+      "junction_height": 54,
+      "source_rate": 0.15,
+      "destinations": [],
+      "destination_weights": {}
+    }
+  ],
+  "roads": [
+    {
+      "id": "R1A",
+      "from": "J1",
+      "to": "J3",
+      "length": 200,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R3A",
+          "R4A"
+        ],
+        [
+          "R3A"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.5
+      ],
+      "corridor_id": "C1"
+    },
+    {
+      "id": "R1B",
+      "from": "J3",
+      "to": "J1",
+      "length": 200,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C1"
+    },
+    {
+      "id": "R2A",
+      "from": "J2",
+      "to": "J3",
+      "length": 120,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R3A",
+          "R4A"
+        ],
+        [
+          "R4A"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C2"
+    },
+    {
+      "id": "R2B",
+      "from": "J3",
+      "to": "J2",
+      "length": 120,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C2"
+    },
+    {
+      "id": "R3A",
+      "from": "J3",
+      "to": "J5",
+      "length": 220,
+      "speed_limit": 12,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C3"
+    },
+    {
+      "id": "R3B",
+      "from": "J5",
+      "to": "J3",
+      "length": 220,
+      "speed_limit": 12,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C3"
+    },
+    {
+      "id": "R4A",
+      "from": "J3",
+      "to": "J4",
+      "length": 120,
+      "speed_limit": 10,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R6A"
+        ],
+        [
+          "R6A"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C4"
+    },
+    {
+      "id": "R4B",
+      "from": "J4",
+      "to": "J3",
+      "length": 120,
+      "speed_limit": 10,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R1B",
+          "R2B"
+        ],
+        [
+          "R2B"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C4"
+    },
+    {
+      "id": "R6A",
+      "from": "J4",
+      "to": "J6",
+      "length": 220,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C5"
+    },
+    {
+      "id": "R6B",
+      "from": "J6",
+      "to": "J4",
+      "length": 220,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R4B"
+        ],
+        [
+          "R4B"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C5"
+    },
+    {
+      "id": "R7A",
+      "from": "J1",
+      "to": "J2",
+      "length": 200,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R2A"
+        ],
+        [
+          "R2A"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C6"
+    },
+    {
+      "id": "R7B",
+      "from": "J2",
+      "to": "J1",
+      "length": 200,
+      "speed_limit": 11,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "R1A"
+        ],
+        [
+          "R1A"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C6"
+    }
+  ]
+}
