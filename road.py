@@ -216,11 +216,16 @@ class Road:
         positions: Dict[int, Tuple[float, float]] = {}
         cell_denominator = max(1, self.cell_count - 1)
         lane_denominator = max(1, self.lanes - 1)
+        # Stop-line fraction: keep vehicles just before the junction boundary
+        stop_fraction = (self.stop_cell - 0.5) / cell_denominator
         for lane_index, lane in enumerate(self._occupancy):
             lateral = 0.5 if self.lanes == 1 else lane_index / lane_denominator
             for cell_index, vehicle in enumerate(lane):
                 if vehicle is not None:
-                    longitudinal = cell_index / cell_denominator
+                    if cell_index == self.stop_cell:
+                        longitudinal = stop_fraction
+                    else:
+                        longitudinal = cell_index / cell_denominator
                     positions[vehicle.vehicle_id] = (longitudinal, lateral)
         return positions
 

@@ -31,7 +31,8 @@ class Junction:
         self.service_rate = max(1, int(service_rate))
         self.junction_width = float(junction_width)
         self.junction_height = float(junction_height)
-
+        self.is_source: bool = False
+        self.is_sink: bool = False
         self.incoming_roads: List[str] = []
         self.outgoing_roads: List[str] = []
         self._current_lane_phase: Optional[Tuple[str, int]] = None
@@ -70,6 +71,14 @@ class Junction:
                 states[key] = "GREEN" if self._current_lane_phase == (road_id, lane_index) else "RED"
         return states
 
+    def get_signal_for_lane(self, road_id: str, lane_index: int) -> str:
+        """Return 'GREEN' or 'RED' for a specific incoming lane at this junction."""
+        if len(self.incoming_roads) <= 1:
+            return "GREEN"  # unsignalized — always green
+        if self._current_lane_phase == (road_id, lane_index):
+            return "GREEN"
+        return "RED"
+        
     def total_queued(self, roads: Dict[str, object]) -> int:
         return sum(self._lane_queue_length(roads, lane_phase) for lane_phase in self._all_lane_phases(roads))
 
@@ -104,8 +113,20 @@ class Junction:
                 break
 
             desired_road_id = vehicle.desired_road_id
+
+        # Vehicle destination is this junction (junction acts as sink)
             if desired_road_id is None:
-                break
+                popped = road.pop_front_vehicle(lane_index, current_time)
+                if popped is None:
+                    break
+                wait_started = popped._wait_started_at
+                if wait_started is not None:
+                    self.total_wait_time += current_time - wait_started
+                popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
+                moved.append(popped)
+                released += 1
+                self.total_processed += 1
+                continue
 
             next_road = roads.get(desired_road_id)
             if next_road is None:
@@ -144,7 +165,16 @@ class Junction:
                 if vehicle is None:
                     continue
                 desired_road_id = vehicle.desired_road_id
+                # Vehicle has arrived at its destination (this junction is the sink)
                 if desired_road_id is None:
+                    popped = road.pop_front_vehicle(lane_index, current_time)
+                    if popped is not None:
+                        wait_started = popped._wait_started_at
+                        if wait_started is not None:
+                            self.total_wait_time += current_time - wait_started
+                        popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
+                        moved.append(popped)
+                        self.total_processed += 1
                     continue
                 next_road = roads.get(desired_road_id)
                 if next_road is None:

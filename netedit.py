@@ -287,7 +287,9 @@ def apply_network_to_engine(engine, network_data: dict) -> None:
                     mode=node.get("source_mode", node.get("mode", "poisson")),
                     destinations=node.get("destinations", []),
                     destination_weights=node.get("destination_weights", {}),
+                    vehicle_types=node.get("vehicle_types", []),  
                 )
+            
             )
         if node.get("is_sink") or node.get("kind") == "sink":
             engine.add_sink(Sink(sink_id=node_id, pos=pos))
@@ -407,7 +409,33 @@ class NetworkEditor:
         checks.pack(fill=tk.X, pady=(0, 8))
         tk.Checkbutton(checks, text="Acts as Source", variable=self.node_source_var, bg="#ded5c4").pack(anchor="w")
         tk.Checkbutton(checks, text="Acts as Sink", variable=self.node_sink_var, bg="#ded5c4").pack(anchor="w")
-
+        
+        self.vtype_frame = tk.LabelFrame(self.node_form, text="Vehicle Types (source)",
+                                          bg="#ded5c4", font=("Arial", 9, "bold"))
+        DEST_COLORS = ["#e53935", "#43a047", "#1e88e5", "#fb8c00", "#8e24aa"]
+        self._vtype_rows = []
+        for vt_idx in range(5):
+            row = tk.Frame(self.vtype_frame, bg="#ded5c4")
+            row.pack(fill=tk.X, pady=1)
+            # Color swatch
+            swatch = tk.Label(row, bg=DEST_COLORS[vt_idx], width=2, relief="ridge")
+            swatch.pack(side=tk.LEFT, padx=(2, 4))
+            tk.Label(row, text=f"T{vt_idx+1}", bg="#ded5c4", width=2).pack(side=tk.LEFT)
+            dest_var = tk.StringVar(value="")
+            flow_var = tk.StringVar(value="0.0")
+            wt_var   = tk.StringVar(value=str(vt_idx + 1))
+            tk.Label(row, text="Dst:", bg="#ded5c4").pack(side=tk.LEFT)
+            dest_entry = tk.Entry(row, textvariable=dest_var, width=5)
+            dest_entry.pack(side=tk.LEFT, padx=2)
+            tk.Label(row, text="Rate:", bg="#ded5c4").pack(side=tk.LEFT)
+            tk.Entry(row, textvariable=flow_var, width=5).pack(side=tk.LEFT, padx=2)
+            tk.Label(row, text="Wt:", bg="#ded5c4").pack(side=tk.LEFT)
+            tk.Entry(row, textvariable=wt_var, width=3).pack(side=tk.LEFT, padx=2)
+            self._vtype_rows.append({
+                "dest": dest_var, "flow": flow_var, "weight": wt_var,
+                "swatch": swatch, "color": DEST_COLORS[vt_idx],
+            })
+        
         tk.Button(self.node_form, text="Apply Junction", command=self._apply_node_form).pack(fill=tk.X, pady=(6, 6))
         tk.Button(self.node_form, text="Delete Junction", command=self._delete_selected).pack(fill=tk.X)
 
@@ -622,6 +650,24 @@ class NetworkEditor:
             self.node_max_green_var.set(str(node.get("max_green", 12)))
             self.node_service_var.set(str(node.get("service_rate", 1)))
             self.node_size_var.set(str(node.get("junction_width", 60)))
+            # Populate vehicle type rows
+            vtypes = node.get("vehicle_types", [])
+            for vt_idx, row_vars in enumerate(self._vtype_rows):
+                if vt_idx < len(vtypes):
+                    vt = vtypes[vt_idx]
+                    row_vars["dest"].set(vt.get("destination", ""))
+                    row_vars["flow"].set(str(vt.get("flow_rate", 0.0)))
+                    row_vars["weight"].set(str(vt.get("weight", vt_idx + 1)))
+                else:
+                    row_vars["dest"].set("")
+                    row_vars["flow"].set("0.0")
+                    row_vars["weight"].set(str(vt_idx + 1))
+            # Show vtype panel only for source nodes
+            if node.get("is_source"):
+                self.vtype_frame.pack(fill=tk.X, pady=(6, 0))
+            else:
+                self.vtype_frame.pack_forget()
+
             self._show_form("node")
             return
 
@@ -649,6 +695,7 @@ class NetworkEditor:
             self.node_form.pack(fill=tk.BOTH, expand=True)
         elif form_name == "road":
             self.road_form.pack(fill=tk.BOTH, expand=True)
+            self.vtype_frame.pack_forget()
 
     def _apply_node_form(self) -> None:
         if self.selected_kind != "node" or self.selected_id is None:
@@ -666,6 +713,22 @@ class NetworkEditor:
         node["min_green"] = _safe_float(self.node_min_green_var.get(), 4.0)
         node["max_green"] = _safe_float(self.node_max_green_var.get(), 12.0)
         node["service_rate"] = max(1, _safe_int(self.node_service_var.get(), 1))
+        vtypes = []
+        DEST_COLORS = ["#e53935", "#43a047", "#1e88e5", "#fb8c00", "#8e24aa"]
+        for vt_idx, row_vars in enumerate(self._vtype_rows):
+            dest = row_vars["dest"].get().strip()
+            flow = _safe_float(row_vars["flow"].get(), 0.0)
+            wt   = max(1, min(5, _safe_int(row_vars["weight"].get(), vt_idx + 1)))
+            if dest and flow > 0:
+                vtypes.append({
+                    "type_id": vt_idx + 1,
+                    "destination": dest,
+                    "flow_rate": flow,
+                    "weight": wt,
+                    "color": DEST_COLORS[vt_idx],
+                })
+        node["vehicle_types"] = vtypes
+        
         size = max(40, _safe_int(self.node_size_var.get(), 60))
         node["junction_width"] = size
         node["junction_height"] = size
@@ -874,22 +937,85 @@ class NetworkEditor:
     def _draw_node(self, node: dict) -> None:
         width = node.get("junction_width", 60)
         height = node.get("junction_height", 60)
-        x1 = node["x"] - width / 2
-        y1 = node["y"] - height / 2
-        x2 = node["x"] + width / 2
-        y2 = node["y"] + height / 2
-        fill = "#5a6c7d" if self.selected_kind == "node" and self.selected_id == node["id"] else "#40566b"
-        self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill, outline="#1c2a36", width=2)
-        self.canvas.create_text(node["x"], node["y"], text=node["id"], fill="white", font=("Arial", 10, "bold"))
-        badge_y = y2 + 16
+        x, y = node["x"], node["y"]
+        x1, y1 = x - width / 2, y - height / 2
+        x2, y2 = x + width / 2, y + height / 2
+        selected = self.selected_kind == "node" and self.selected_id == node["id"]
+
+        # Base fill by role
+        is_source = node.get("is_source", False)
+        is_sink = node.get("is_sink", False)
+        if is_source and is_sink:
+            fill = "#5a7a3a" if not selected else "#7aaa4a"
+        elif is_source:
+            fill = "#2e6b2e" if not selected else "#3d8f3d"
+        elif is_sink:
+            fill = "#7a2a2a" if not selected else "#a03030"
+        else:
+            fill = "#40566b" if not selected else "#5a6c7d"
+
+        # Outer border (SUMO-style thick dark border)
+        self.canvas.create_rectangle(x1 - 2, y1 - 2, x2 + 2, y2 + 2,
+                                    fill="#1c2a36", outline="", width=0)
+        # Main junction box
+        self.canvas.create_rectangle(x1, y1, x2, y2,
+                                    fill=fill, outline="#0d1820", width=2)
+
+        # Interior crosshatch (SUMO style) — only for intermediate junctions
+        if not is_source and not is_sink:
+            hatch_color = "#34495a"
+            spacing = 8
+            # Diagonal lines /
+            for offset in range(-int(width + height), int(width + height), spacing):
+                lx1 = x1
+                ly1 = y1 + offset
+                lx2 = x1 + offset
+                ly2 = y1
+                # Clip to rectangle bounds
+                pts = _clip_line_to_rect(lx1, ly1, lx2, ly2, x1, y1, x2, y2)
+                if pts:
+                    self.canvas.create_line(*pts, fill=hatch_color, width=1)
+
+        # Signal heads: small circles on each edge where roads connect
+        incoming_roads = [r for r in self.network["roads"] if r["to"] == node["id"]]
+        num_incoming = len(incoming_roads)
+        if num_incoming >= 2 and not is_source and not is_sink:
+            # Place a signal head on the inner edge of each incoming road arm
+            for road in incoming_roads:
+                from_node = self._find_node(road["from"])
+                # Direction vector from junction toward from_node
+                dx = from_node["x"] - x
+                dy = from_node["y"] - y
+                dist = max(1.0, (dx**2 + dy**2) ** 0.5)
+                # Place signal at junction edge
+                edge_x = x + (dx / dist) * (width / 2 - 4)
+                edge_y = y + (dy / dist) * (height / 2 - 4)
+                # Draw a small 3-light signal post (green/amber/red stacked)
+                for si, sc in enumerate(["#e74c3c", "#f39c12", "#2ecc71"]):
+                    self.canvas.create_oval(
+                        edge_x - 3, edge_y - 3 + si * 7,
+                        edge_x + 3, edge_y + 3 + si * 7,
+                        fill=sc, outline="#111", width=1
+                    )
+
+        # Junction ID
+        self.canvas.create_text(x, y, text=node["id"], fill="white",
+                                font=("Arial", 10, "bold"))
+
+        # Role badges
+        badge_y = y2 + 14
         badges: List[str] = []
-        if node.get("is_source"):
+        if is_source:
             badges.append("SRC")
-        if node.get("is_sink"):
+        if is_sink:
             badges.append("SNK")
         if badges:
-            self.canvas.create_text(node["x"], badge_y, text=" / ".join(badges), fill="#135f22", font=("Arial", 8, "bold"))
-
+            badge_color = "#2e8b2e" if is_source else "#cc3300"
+            if is_source and is_sink:
+                badge_color = "#5a8a2e"
+            self.canvas.create_text(x, badge_y, text=" / ".join(badges),
+                                    fill=badge_color, font=("Arial", 8, "bold"))
+    
     def run(self) -> None:
         self.root.mainloop()
 
@@ -982,3 +1108,24 @@ def _distance_to_segment(point: tuple, start: tuple, end: tuple) -> float:
     cx = x1 + t * dx
     cy = y1 + t * dy
     return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+
+def _clip_line_to_rect(lx1, ly1, lx2, ly2, rx1, ry1, rx2, ry2):
+    """Cohen-Sutherland clip: return clipped (x1,y1,x2,y2) or None."""
+    def code(x, y):
+        c = 0
+        if x < rx1: c |= 1
+        elif x > rx2: c |= 2
+        if y < ry1: c |= 4
+        elif y > ry2: c |= 8
+        return c
+    c1, c2 = code(lx1, ly1), code(lx2, ly2)
+    while True:
+        if not (c1 | c2): return (lx1, ly1, lx2, ly2)
+        if c1 & c2: return None
+        c = c1 if c1 else c2
+        if c & 1:   x = rx1; y = ly1 + (ly2-ly1)*(rx1-lx1)/(lx2-lx1+1e-9)
+        elif c & 2: x = rx2; y = ly1 + (ly2-ly1)*(rx2-lx1)/(lx2-lx1+1e-9)
+        elif c & 4: y = ry1; x = lx1 + (lx2-lx1)*(ry1-ly1)/(ly2-ly1+1e-9)
+        else:       y = ry2; x = lx1 + (lx2-lx1)*(ry2-ly1)/(ly2-ly1+1e-9)
+        if c == c1: lx1,ly1,c1 = x,y,code(x,y)
+        else:       lx2,ly2,c2 = x,y,code(x,y)
