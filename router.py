@@ -1,8 +1,43 @@
-"""Routing for the traffic simulator."""
+"""Routing for the traffic simulator.
+
+HOW ROUTING WORKS
+-----------------
+1. BUILD PHASE (build_from_network):
+   The Router reads every Road object and builds a weighted directed graph:
+     node → [(neighbour_node, road_id, travel_cost), ...]
+   Cost = road.length / road.speed_limit  (travel time in seconds at free-flow speed).
+
+2. PLAN ROUTE (plan_route):
+   Dijkstra's algorithm finds the minimum-cost path of NODES from source to sink.
+   The result is cached so repeated source→dest pairs pay zero cost after the first call.
+   Returns (route_nodes, route_roads):
+     route_nodes = ["J1", "J3", "J5"]
+     route_roads = ["R1A", "R3A"]        ← one road per consecutive node pair
+
+3. LANE ASSIGNMENT – Indian left-keep rule:
+   Once a vehicle is on a road it must queue at a lane that is legal for its next turn.
+   India drives on the LEFT, so:
+     • Left-turn  → leftmost lane  (index 0)
+     • Straight   → middle lanes   (index 1 … n-2) or any for single-lane
+     • Right-turn → rightmost lane (index n-1)
+   The geometry between (current road direction) and (next road direction) is used to
+   classify the turn angle:
+     angle < -45°  → left turn
+     angle > +45°  → right turn
+     otherwise     → straight
+   This replaces the old explicit lane_directions[] lookup for multi-lane roads.
+   Single-lane roads (lanes==1) still use lane_directions=["*"] and need no config.
+
+4. SIGNAL-AWARE LANE PICK:
+   best_entry_lane() on the Road respects the Indian rule via allowed_lanes_for_turn().
+   Vehicles nearer the stop-line (cells ≥ stop_cell-4) will NOT change lane, matching
+   real queuing behaviour.
+"""
 
 from __future__ import annotations
 
 import heapq
+import math
 from typing import Dict, List, Optional, Tuple
 
 
@@ -12,18 +47,24 @@ class Router:
     def __init__(self) -> None:
         self._adjacency: Dict[str, List[Tuple[str, str, float]]] = {}
         self._route_cache: Dict[Tuple[str, str], Optional[Tuple[List[str], List[str]]]] = {}
+        # node_id → (x, y) for geometry-based turn classification
+        self._positions: Dict[str, Tuple[float, float]] = {}
 
-    def add_node(self, node_id: str) -> None:
+    def add_node(self, node_id: str, pos: Tuple[float, float] = (0.0, 0.0)) -> None:
         self._adjacency.setdefault(node_id, [])
+        self._positions[node_id] = pos
 
     def add_edge(self, from_node: str, to_node: str, road_id: str, cost: float) -> None:
         self.add_node(from_node)
         self.add_node(to_node)
         self._adjacency[from_node].append((to_node, road_id, cost))
 
-    def build_from_network(self, roads: Dict[str, object], node_ids: List[str]) -> None:
+    def build_from_network(self, roads: Dict[str, object], node_ids: List[str],
+                           node_positions: Optional[Dict[str, Tuple[float, float]]] = None) -> None:
         self._adjacency = {node_id: [] for node_id in node_ids}
         self._route_cache.clear()
+        if node_positions:
+            self._positions.update(node_positions)
         for road in roads.values():
             self.add_edge(
                 road.from_node,
@@ -86,3 +127,75 @@ class Router:
         result = (node_path, road_path)
         self._route_cache[cache_key] = result
         return result
+
+    # ------------------------------------------------------------------
+    # Indian left-keep lane classification helpers
+    # ------------------------------------------------------------------
+
+    def classify_turn(self, prev_node: str, junction_node: str, next_node: str) -> str:
+        """Return 'left', 'straight', or 'right' using bearing change.
+
+        Bearing of incoming road = direction FROM prev_node TO junction_node.
+        Bearing of outgoing road = direction FROM junction_node TO next_node.
+        Signed angle (cross product sign) determines turn direction.
+        India drives LEFT, so:
+          negative cross (right-hand turn in standard coords with y-down) → LEFT turn
+          positive cross → RIGHT turn
+        """
+        p = self._positions.get(prev_node, (0.0, 0.0))
+        j = self._positions.get(junction_node, (0.0, 0.0))
+        n = self._positions.get(next_node, (0.0, 0.0))
+
+        in_dx = j[0] - p[0]
+        in_dy = j[1] - p[1]
+        out_dx = n[0] - j[0]
+        out_dy = n[1] - j[1]
+
+        # Signed angle via cross product (screen coords: y increases downward)
+        cross = in_dx * out_dy - in_dy * out_dx
+        dot = in_dx * out_dx + in_dy * out_dy
+        angle = math.degrees(math.atan2(cross, dot))
+
+        if angle < -45:
+            return "left"
+        if angle > 45:
+            return "right"
+        return "straight"
+
+    def preferred_lanes_india(self, turn: str, lane_count: int) -> List[int]:
+        """Return ordered list of preferred lane indices for an Indian left-keep rule.
+
+        Lane 0 = leftmost (slow/kerb side), lane n-1 = rightmost (fast/centre).
+        • Left turn  → lane 0 (leftmost)
+        • Straight   → middle lanes (1 … n-2), falling back to any
+        • Right turn → lane n-1 (rightmost)
+        Single-lane road: always [0].
+        """
+        if lane_count == 1:
+            return [0]
+        if turn == "left":
+            return [0]
+        if turn == "right":
+            return [lane_count - 1]
+        # straight: prefer middle lanes
+        middle = list(range(1, lane_count - 1)) or [0]
+        return middle
+
+    def get_turn_for_vehicle(self, route_nodes: List[str], route_cursor: int) -> str:
+        """Return turn classification for a vehicle currently on route_roads[route_cursor].
+
+        route_cursor is the index into route_roads of the road the vehicle is ON.
+        The junction is route_nodes[route_cursor + 1].
+        The next road leads to route_nodes[route_cursor + 2].
+        """
+        # Need three nodes: prev, junction, next
+        prev_idx = route_cursor
+        junc_idx = route_cursor + 1
+        next_idx = route_cursor + 2
+        if prev_idx < 0 or next_idx >= len(route_nodes):
+            return "straight"
+        return self.classify_turn(
+            route_nodes[prev_idx],
+            route_nodes[junc_idx],
+            route_nodes[next_idx],
+        )

@@ -1,4 +1,19 @@
-"""Directional multi-lane road cells with safe discrete-time movement."""
+"""Directional multi-lane road cells with safe discrete-time movement.
+
+Lane assignment – Indian left-keep rule
+----------------------------------------
+For multi-lane roads (lanes >= 2), explicit lane_directions[] is IGNORED.
+Instead, a vehicle's desired turn at the next junction determines which lane it
+should be in:
+  • Left turn  → lane 0  (leftmost / kerb lane)
+  • Straight   → middle  (lane 1 … n-2)
+  • Right turn → lane n-1 (rightmost / fast lane)
+
+Single-lane roads still use lane_directions=["*"] (wildcard, no config needed).
+
+Vehicles approaching the stop line (within APPROACH_CELLS) do NOT change lane,
+mirroring real stop-line queuing behaviour.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +21,16 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 
 
+APPROACH_CELLS = 5   # cells from stop-line where lane changes are forbidden
+
+
 class Road:
     """
     A directional road represented by per-lane occupancy cells.
 
     Each cell holds at most one vehicle, so overlaps cannot happen.
-    Vehicles stop at the final cell, which acts as a stop line before the junction.
+    Vehicles stop at the final cell (stop_cell), which is the stop line
+    before the junction. They are rendered just short of the junction box.
     """
 
     def __init__(
@@ -45,6 +64,8 @@ class Road:
             [None for _ in range(self.cell_count)] for _ in range(self.lanes)
         ]
 
+        # lane_directions kept for single-lane roads or explicit overrides.
+        # Multi-lane roads use Indian rule via preferred_lanes_for_turn().
         self.lane_directions: List[List[str]] = self._normalise_lane_directions(lane_directions)
         self.lane_flow_weights: List[float] = self._normalise_lane_flow_weights(lane_flow_weights)
 
@@ -52,6 +73,10 @@ class Road:
         self.total_vehicles_exited = 0
         self.cumulative_travel_time = 0.0
         self.max_occupancy = 0
+
+    # ------------------------------------------------------------------
+    # Initialisation helpers
+    # ------------------------------------------------------------------
 
     def _normalise_lane_directions(self, lane_directions: Optional[Sequence[Sequence[str]]]) -> List[List[str]]:
         if not lane_directions:
@@ -71,6 +96,44 @@ class Road:
             values.append(1.0)
         return values[: self.lanes]
 
+    # ------------------------------------------------------------------
+    # Indian left-keep lane helpers
+    # ------------------------------------------------------------------
+
+    def preferred_lanes_for_turn(self, turn: str) -> List[int]:
+        """Return preferred lane indices for the given turn at road end.
+
+        turn: 'left' | 'straight' | 'right'
+        Lane 0 = leftmost (kerb), lane n-1 = rightmost (centre/fast).
+        """
+        n = self.lanes
+        if n == 1:
+            return [0]
+        if turn == "left":
+            return [0]
+        if turn == "right":
+            return [n - 1]
+        # straight: middle lanes, falling back to all if no middle exists
+        middle = list(range(1, n - 1))
+        return middle if middle else [0, n - 1]
+
+    def allowed_lanes_for(self, desired_road_id: Optional[str],
+                          turn: str = "straight") -> List[int]:
+        """Return lanes legal for the given next-road / turn combination.
+
+        Multi-lane roads (lanes >= 2): use Indian turn rule.
+        Single-lane roads: use lane_directions wildcard (always [0]).
+        """
+        if self.lanes == 1:
+            return [0]
+        preferred = self.preferred_lanes_for_turn(turn)
+        # Fall back to all lanes if preferred are all occupied
+        return preferred
+
+    # ------------------------------------------------------------------
+    # Capacity / entry helpers
+    # ------------------------------------------------------------------
+
     @property
     def occupancy(self) -> int:
         return sum(1 for lane in self._occupancy for vehicle in lane if vehicle is not None)
@@ -81,28 +144,35 @@ class Road:
     def lane_can_accept(self, lane_index: int) -> bool:
         return 0 <= lane_index < self.lanes and self._occupancy[lane_index][0] is None
 
-    def allowed_lanes_for(self, desired_road_id: Optional[str]) -> List[int]:
-        allowed_lanes: List[int] = []
-        for lane_index, lane_rules in enumerate(self.lane_directions):
-            if "*" in lane_rules or desired_road_id in lane_rules or not lane_rules:
-                allowed_lanes.append(lane_index)
-        return allowed_lanes
+    def best_entry_lane(self, desired_road_id: Optional[str],
+                        turn: str = "straight") -> Optional[int]:
+        """Pick the best free lane for a vehicle entering this road.
 
-    def best_entry_lane(self, desired_road_id: Optional[str]) -> Optional[int]:
-        candidate_lanes = self.allowed_lanes_for(desired_road_id)
-        free_candidates = [lane for lane in candidate_lanes if self.lane_can_accept(lane)]
-        if not free_candidates:
-            return None
-        return min(free_candidates, key=lambda lane: self._lane_density(lane))
+        Preferred lanes are determined by the Indian rule using *turn*.
+        Falls back to any free lane if preferred lanes are full.
+        """
+        preferred = self.allowed_lanes_for(desired_road_id, turn)
+        free_preferred = [l for l in preferred if self.lane_can_accept(l)]
+        if free_preferred:
+            return min(free_preferred, key=lambda l: self._lane_density(l))
+        # Fallback: any free lane
+        any_free = [l for l in range(self.lanes) if self.lane_can_accept(l)]
+        if any_free:
+            return min(any_free, key=lambda l: self._lane_density(l))
+        return None
 
     def can_accept_vehicle(self, desired_road_id: Optional[str] = None) -> bool:
         return self.best_entry_lane(desired_road_id) is not None
 
-    def accept_vehicle(self, vehicle, current_time: float, preferred_lane: Optional[int] = None) -> bool:
+    def accept_vehicle(self, vehicle, current_time: float,
+                       preferred_lane: Optional[int] = None) -> bool:
         if preferred_lane is not None and self.lane_can_accept(preferred_lane):
             lane_index = preferred_lane
         else:
-            lane_index = self.best_entry_lane(vehicle.downstream_target_after_next_entry())
+            turn = getattr(vehicle, "next_turn", "straight")
+            lane_index = self.best_entry_lane(
+                getattr(vehicle, "desired_road_id", None), turn
+            )
         if lane_index is None:
             return False
 
@@ -112,6 +182,10 @@ class Road:
         self.max_occupancy = max(self.max_occupancy, self.occupancy)
         return True
 
+    # ------------------------------------------------------------------
+    # Movement
+    # ------------------------------------------------------------------
+
     def movement_probability(self, dt: float, lane_index: int) -> float:
         density = self._lane_density(lane_index)
         free_flow_probability = min(0.92, (self.speed_limit * dt) / self.cell_length)
@@ -119,16 +193,13 @@ class Road:
         return max(0.05, min(0.98, free_flow_probability * congestion_factor))
 
     def _lane_density(self, lane_index: int) -> float:
-        return sum(1 for vehicle in self._occupancy[lane_index] if vehicle is not None) / max(1, self.cell_count)
+        return sum(1 for v in self._occupancy[lane_index] if v is not None) / max(1, self.cell_count)
 
     def lane_vehicle_count(self, lane_index: int) -> int:
-        return sum(1 for vehicle in self._occupancy[lane_index] if vehicle is not None)
+        return sum(1 for v in self._occupancy[lane_index] if v is not None)
 
     def front_vehicle(self, lane_index: int):
-        vehicle = self._occupancy[lane_index][self.stop_cell]
-        if vehicle is not None:
-            return vehicle
-        return None
+        return self._occupancy[lane_index][self.stop_cell]
 
     def pop_front_vehicle(self, lane_index: int, current_time: float):
         vehicle = self._occupancy[lane_index][self.stop_cell]
@@ -141,21 +212,20 @@ class Road:
 
     def step(self, dt: float, rng) -> None:
         for lane_index in range(self.lanes):
-            move_probability = self.movement_probability(dt, lane_index)
-
+            move_prob = self.movement_probability(dt, lane_index)
+            # Sweep from stop-line backward so forward cells are always free
             for cell_index in range(self.stop_cell - 1, -1, -1):
                 vehicle = self._occupancy[lane_index][cell_index]
                 if vehicle is None:
                     continue
-
-                target_lane, target_cell = self._choose_next_position(vehicle, lane_index, cell_index, rng, move_probability)
+                target_lane, target_cell = self._choose_next_position(
+                    vehicle, lane_index, cell_index, rng, move_prob
+                )
                 if target_lane == lane_index and target_cell == cell_index:
                     continue
-
                 self._occupancy[lane_index][cell_index] = None
                 self._occupancy[target_lane][target_cell] = vehicle
                 vehicle.advance_within_road(target_lane, target_cell)
-
         self.max_occupancy = max(self.max_occupancy, self.occupancy)
 
     def _choose_next_position(
@@ -166,44 +236,46 @@ class Road:
         rng,
         move_probability: float,
     ) -> Tuple[int, int]:
-        current_allowed = self._lane_allows_turn(lane_index, vehicle.desired_road_id)
+        near_stop_line = cell_index >= self.stop_cell - APPROACH_CELLS
+        current_turn = getattr(vehicle, "next_turn", "straight")
+        preferred_for_turn = self.preferred_lanes_for_turn(current_turn)
+        already_correct = lane_index in preferred_for_turn
+
         candidate_moves: List[Tuple[int, int, float]] = []
-        approach_cells = 4
-        near_stop_line = cell_index >= self.stop_cell - approach_cells
 
+        # Move forward in same lane
         if cell_index + 1 <= self.stop_cell and self._occupancy[lane_index][cell_index + 1] is None:
-            candidate_moves.append((lane_index, cell_index + 1, 1.0 if current_allowed else 0.5))
+            candidate_moves.append((lane_index, cell_index + 1, 1.0))
 
+        # Near stop-line: no lane changes
         if near_stop_line:
             if candidate_moves and rng.random() < move_probability:
-                candidate_moves.sort(key=lambda move: (move[2], move[1]), reverse=True)
-                best_lane, best_cell, _ = candidate_moves[0]
-                return best_lane, best_cell
+                return lane_index, cell_index + 1
             return lane_index, cell_index
 
-        for lane_shift in (-1, 1):
-            next_lane = lane_index + lane_shift
-            if not 0 <= next_lane < self.lanes:
-                continue
-            if self._occupancy[next_lane][cell_index] is not None:
-                continue
-            if not self._lane_allows_turn(next_lane, vehicle.desired_road_id):
-                continue
-            if current_allowed and self._lane_density(next_lane) >= self._lane_density(lane_index):
-                continue
-            weight = 1.3 if cell_index >= self.stop_cell - 3 else 0.7
-            candidate_moves.append((next_lane, cell_index, weight))
-            if cell_index + 1 <= self.stop_cell and self._occupancy[next_lane][cell_index + 1] is None:
-                candidate_moves.append((next_lane, cell_index + 1, weight + 0.3))
+        # Lane changes only when not already in correct lane
+        if not already_correct:
+            for lane_shift in (-1, 1):
+                next_lane = lane_index + lane_shift
+                if not 0 <= next_lane < self.lanes:
+                    continue
+                if self._occupancy[next_lane][cell_index] is not None:
+                    continue
+                if next_lane not in preferred_for_turn:
+                    continue
+                weight = 1.5  # strong pull toward correct lane
+                candidate_moves.append((next_lane, cell_index, weight))
+                if cell_index + 1 <= self.stop_cell and self._occupancy[next_lane][cell_index + 1] is None:
+                    candidate_moves.append((next_lane, cell_index + 1, weight + 0.3))
 
         if not candidate_moves or rng.random() >= move_probability:
             return lane_index, cell_index
 
-        candidate_moves.sort(key=lambda move: (move[2], move[1]), reverse=True)
-        best_lane, best_cell, _ = candidate_moves[0]
-        return best_lane, best_cell
+        candidate_moves.sort(key=lambda m: (m[2], m[1]), reverse=True)
+        return candidate_moves[0][0], candidate_moves[0][1]
 
     def _lane_allows_turn(self, lane_index: int, desired_road_id: Optional[str]) -> bool:
+        """Legacy helper kept for compatibility."""
         lane_rules = self.lane_directions[lane_index]
         return "*" in lane_rules or desired_road_id in lane_rules or desired_road_id is None
 
@@ -213,24 +285,28 @@ class Road:
         return self.cumulative_travel_time / self.total_vehicles_exited
 
     def vehicle_positions(self) -> Dict[int, Tuple[float, float]]:
+        """Return {vehicle_id: (longitudinal_fraction, lateral_fraction)}.
+
+        Vehicles at the stop_cell are placed just SHORT of the junction (0.88)
+        so they render before the junction box, not inside it.
+        """
         positions: Dict[int, Tuple[float, float]] = {}
         cell_denominator = max(1, self.cell_count - 1)
         lane_denominator = max(1, self.lanes - 1)
-        # Stop-line fraction: keep vehicles just before the junction boundary
-        stop_fraction = (self.stop_cell - 0.5) / cell_denominator
+        stop_fraction = max(0.0, (self.stop_cell - 0.5) / cell_denominator)
+
         for lane_index, lane in enumerate(self._occupancy):
             lateral = 0.5 if self.lanes == 1 else lane_index / lane_denominator
             for cell_index, vehicle in enumerate(lane):
                 if vehicle is not None:
-                    if cell_index == self.stop_cell:
-                        longitudinal = stop_fraction
-                    else:
-                        longitudinal = cell_index / cell_denominator
+                    longitudinal = stop_fraction if cell_index == self.stop_cell \
+                        else cell_index / cell_denominator
                     positions[vehicle.vehicle_id] = (longitudinal, lateral)
         return positions
 
     def lane_signal_state(self, lane_index: int, signal_states: Dict[str, str]) -> str:
-        return signal_states.get(f"{self.road_id}:{lane_index}", signal_states.get(self.road_id, "RED"))
+        return signal_states.get(f"{self.road_id}:{lane_index}",
+                                 signal_states.get(self.road_id, "RED"))
 
     def __repr__(self) -> str:
         return (

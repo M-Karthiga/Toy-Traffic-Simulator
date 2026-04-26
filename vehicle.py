@@ -27,25 +27,28 @@ class Vehicle:
     current_lane: Optional[int] = None
     current_cell: int = 0
     desired_road_id: Optional[str] = None
+    # next_turn: 'left' | 'straight' | 'right'  – set by engine after routing
+    next_turn: str = "straight"
     road_entry_time: float = 0.0
     spawn_time: float = 0.0
     arrival_time: Optional[float] = None
     total_wait_time: float = 0.0
     distance_travelled_m: float = 0.0
     _wait_started_at: Optional[float] = None
-    type_id: int = 1          # 1–5 vehicle type
-    weight: int = 1           # 1–5 vehicle weight class
-    color_override: Optional[str] = None  # set by source for per-type colouring
+
+    # Vehicle type metadata (set by source)
+    type_id: int = 1               # 1–5 vehicle class
+    weight: int = 1                # 1–5 size/priority class
+    color_override: Optional[str] = None  # per-destination colour set by source
 
     DESTINATION_COLORS: ClassVar[List[str]] = [
-        "#f94144",
-        "#f3722c",
-        "#f8961e",
-        "#90be6d",
-        "#43aa8b",
-        "#577590",
-        "#277da1",
-        "#9b5de5",
+        "#f94144", "#f3722c", "#f8961e", "#90be6d",
+        "#43aa8b", "#577590", "#277da1", "#9b5de5",
+    ]
+
+    # Type display names
+    TYPE_NAMES: ClassVar[List[str]] = [
+        "Car", "Auto", "Bus", "Truck", "Bike"
     ]
 
     def __post_init__(self) -> None:
@@ -113,12 +116,9 @@ class Vehicle:
             return "sink"
         prev_node = self.route_nodes[self.route_cursor]
         current_node = self.route_nodes[self.route_cursor + 1]
-        next_node = self.route_nodes[self.route_cursor + 2]
-        prev_dx = current_node != prev_node
-        _ = prev_dx
-        if prev_node == current_node or current_node == next_node:
-            return "through"
-        return "turn"
+        next_node = self.route_nodes[self.route_cursor + 2] if self.route_cursor + 2 < len(self.route_nodes) else current_node
+        _ = prev_node, next_node
+        return "through"
 
     def arrive(self, current_time: float) -> None:
         self.end_wait(current_time)
@@ -140,5 +140,6 @@ class Vehicle:
     def __repr__(self) -> str:
         return (
             f"Vehicle(id={self.vehicle_id}, src={self.source_id}, dst={self.destination_id}, "
-            f"state={self.state}, road={self.current_road_id}, lane={self.current_lane}, cell={self.current_cell})"
+            f"type={self.type_id}, state={self.state}, road={self.current_road_id}, "
+            f"lane={self.current_lane}, cell={self.current_cell}, turn={self.next_turn})"
         )

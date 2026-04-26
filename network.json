@@ -24,7 +24,8 @@
       "max_green": 12.0,
       "service_rate": 1,
       "junction_width": 54,
-      "junction_height": 54
+      "junction_height": 54,
+      "vehicle_types": []
     },
     {
       "id": "J2",
@@ -49,7 +50,8 @@
       "max_green": 12.0,
       "service_rate": 1,
       "junction_width": 54,
-      "junction_height": 54
+      "junction_height": 54,
+      "vehicle_types": []
     },
     {
       "id": "J3",
@@ -84,8 +86,8 @@
       "id": "J5",
       "x": 540,
       "y": 240,
-      "is_source": false,
-      "is_sink": true,
+      "is_source": true,
+      "is_sink": false,
       "signal_algorithm": "wfq_lane",
       "min_green": 4.0,
       "max_green": 10.0,
@@ -94,7 +96,8 @@
       "junction_height": 54,
       "source_rate": 0.15,
       "destinations": [],
-      "destination_weights": {}
+      "destination_weights": {},
+      "vehicle_types": []
     },
     {
       "id": "J6",

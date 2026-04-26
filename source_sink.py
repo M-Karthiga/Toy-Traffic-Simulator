@@ -8,9 +8,15 @@ from typing import Deque, Dict, Iterable, List, Optional
 
 
 class Source:
-    """Generates vehicles and buffers them when the outgoing road is blocked."""
+    """Generates vehicles and buffers them when the outgoing road is blocked.
 
-    # REPLACE the entire __init__ signature and body up to self._rng:
+    Two modes:
+    1. vehicle_types list (new):  per-type independent Poisson processes.
+       Each entry: {"type_id": int, "destination": str, "flow_rate": float,
+                    "weight": int, "color": str}
+    2. Legacy single-rate: uses rate + destinations + destination_weights.
+    """
+
     def __init__(
         self,
         source_id: str,
@@ -19,7 +25,7 @@ class Source:
         mode: str = "poisson",
         destinations: Optional[Iterable[str]] = None,
         destination_weights: Optional[Dict[str, float]] = None,
-        vehicle_types: Optional[List[dict]] = None,   # ADD THIS PARAM
+        vehicle_types: Optional[List[dict]] = None,
         seed: Optional[int] = None,
     ) -> None:
         self.source_id = source_id
@@ -28,10 +34,8 @@ class Source:
         self.mode = mode
         self.destinations = list(destinations or [])
         self.destination_weights = dict(destination_weights or {})
-        # NEW: structured vehicle type configs
-        # Each entry: {"type_id": int, "destination": str, "flow_rate": float,
-        #              "weight": int, "color": str}
         self.vehicle_types: List[dict] = list(vehicle_types or [])
+
         self.outgoing_roads: List[str] = []
         self.pending_vehicles: Deque[object] = collections.deque()
         self.total_generated = 0
@@ -40,12 +44,15 @@ class Source:
         self._rng = random.Random(seed)
         self._next_arrival = self._sample_gap()
         self._constant_timer = 0.0
-        # Per-type Poisson timers when vehicle_types is used
-        self._type_timers: List[float] = [
-            self._rng.expovariate(max(vt["flow_rate"], 1e-9))
-            if vt.get("flow_rate", 0) > 0 else float("inf")
-            for vt in self.vehicle_types
-        ]
+
+        # Per-type independent Poisson timers
+        self._type_timers: List[float] = []
+        for vt in self.vehicle_types:
+            fr = float(vt.get("flow_rate", 0.0))
+            if fr > 0:
+                self._type_timers.append(self._rng.expovariate(fr))
+            else:
+                self._type_timers.append(float("inf"))
 
     def add_outgoing_road(self, road_id: str) -> None:
         if road_id not in self.outgoing_roads:
@@ -66,31 +73,31 @@ class Source:
             return self._rng.choices(self.destinations, weights=weights, k=1)[0]
         return self._rng.choice(self.destinations)
 
-    # REPLACE the entire step() method:
     def step(self, dt: float) -> List[dict]:
-        """Return list of spawn dicts: {"destination": str, "type_id": int,
-        "weight": int, "color": str} (or just destination str for legacy mode)."""
+        """Return list of spawn dicts:
+        {"destination": str, "type_id": int, "weight": int, "color": str | None}
+        """
         spawned: List[dict] = []
 
-        # NEW PATH: structured vehicle_types with per-type Poisson
+        # ── NEW PATH: structured vehicle_types with per-type Poisson ──
         if self.vehicle_types:
             for index, vt in enumerate(self.vehicle_types):
-                flow_rate = vt.get("flow_rate", 0.0)
-                if flow_rate <= 0:
+                fr = float(vt.get("flow_rate", 0.0))
+                if fr <= 0:
                     continue
                 self._type_timers[index] -= dt
                 while self._type_timers[index] <= 0:
                     spawned.append({
                         "destination": vt["destination"],
-                        "type_id": vt.get("type_id", 1),
-                        "weight": vt.get("weight", 1),
-                        "color": vt.get("color", None),
+                        "type_id":     vt.get("type_id", 1),
+                        "weight":      vt.get("weight", 1),
+                        "color":       vt.get("color", None),
                     })
-                    self._type_timers[index] += self._rng.expovariate(flow_rate)
+                    self._type_timers[index] += self._rng.expovariate(fr)
             self.total_generated += len(spawned)
             return spawned
 
-        # LEGACY PATH: original single-rate behaviour
+        # ── LEGACY PATH: single-rate ──
         if self.rate <= 0:
             return spawned
         if self.mode == "constant":
@@ -100,15 +107,15 @@ class Source:
                 self._constant_timer -= gap
                 destination = self._pick_destination()
                 if destination is not None:
-                    spawned.append({"destination": destination, "type_id": 1,
-                                    "weight": 1, "color": None})
+                    spawned.append({"destination": destination,
+                                    "type_id": 1, "weight": 1, "color": None})
         else:
             self._next_arrival -= dt
             while self._next_arrival <= 0:
                 destination = self._pick_destination()
                 if destination is not None:
-                    spawned.append({"destination": destination, "type_id": 1,
-                                    "weight": 1, "color": None})
+                    spawned.append({"destination": destination,
+                                    "type_id": 1, "weight": 1, "color": None})
                 self._next_arrival += self._sample_gap()
         self.total_generated += len(spawned)
         return spawned
