@@ -365,13 +365,34 @@ class NetworkEditor:
 
     def _build_sidebar(self) -> None:
         title = tk.Label(self.sidebar, text="Inspector", font=("Arial", 15, "bold"), bg="#ded5c4")
-        title.pack(anchor="w", padx=12, pady=(12, 8))
+        title.pack(anchor="w", padx=12, pady=(12, 4))
 
         self.object_name = tk.StringVar(value="No selection")
         tk.Label(self.sidebar, textvariable=self.object_name, bg="#ded5c4", font=("Arial", 11, "bold")).pack(anchor="w", padx=12)
 
-        self.form = tk.Frame(self.sidebar, bg="#ded5c4")
-        self.form.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        # Scrollable area
+        scroll_container = tk.Frame(self.sidebar, bg="#ded5c4")
+        scroll_container.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        self._scroll_canvas = tk.Canvas(scroll_container, bg="#ded5c4", highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=self._scroll_canvas.yview)
+        self._scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.form = tk.Frame(self._scroll_canvas, bg="#ded5c4")
+        self._form_window = self._scroll_canvas.create_window((0, 0), window=self.form, anchor="nw")
+
+        def _on_frame_configure(event):
+            self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all"))
+        def _on_canvas_configure(event):
+            self._scroll_canvas.itemconfig(self._form_window, width=event.width)
+        self.form.bind("<Configure>", _on_frame_configure)
+        self._scroll_canvas.bind("<Configure>", _on_canvas_configure)
+        # Mouse-wheel scrolling
+        def _on_mousewheel(event):
+            self._scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self._scroll_canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
         self._build_node_form()
         self._build_road_form()
@@ -379,65 +400,135 @@ class NetworkEditor:
 
     def _build_node_form(self) -> None:
         self.node_form = tk.Frame(self.form, bg="#ded5c4")
-        self.node_id_var = tk.StringVar()
-        self.node_source_var = tk.BooleanVar(value=False)
-        self.node_sink_var = tk.BooleanVar(value=False)
-        self.node_source_rate_var = tk.StringVar(value="0.25")
-        self.node_destinations_var = tk.StringVar()
-        self.node_dest_weights_var = tk.StringVar()
+
+        # ── Core state vars ──────────────────────────────────────────
+        self.node_id_var          = tk.StringVar()
+        self.node_source_var      = tk.BooleanVar(value=False)
+        self.node_sink_var        = tk.BooleanVar(value=False)
+        self.node_source_rate_var = tk.StringVar(value="0.00")  # computed/display only
         self.node_signal_algo_var = tk.StringVar(value="wfq_lane")
-        self.node_min_green_var = tk.StringVar(value="4")
-        self.node_max_green_var = tk.StringVar(value="12")
-        self.node_service_var = tk.StringVar(value="1")
-        self.node_size_var = tk.StringVar(value="60")
+        self.node_min_green_var   = tk.StringVar(value="4")
+        self.node_max_green_var   = tk.StringVar(value="12")
+        self.node_service_var     = tk.StringVar(value="1")
+        self.node_size_var        = tk.StringVar(value="60")
 
-        for label_text, variable in [
-            ("Junction Id", self.node_id_var),
-            ("Source Rate", self.node_source_rate_var),
-            ("Destinations (comma)", self.node_destinations_var),
-            ("Destination Weights", self.node_dest_weights_var),
-            ("Signal Algo", self.node_signal_algo_var),
-            ("Min Green", self.node_min_green_var),
-            ("Max Green", self.node_max_green_var),
-            ("Service Rate", self.node_service_var),
-            ("Junction Size", self.node_size_var),
-        ]:
-            tk.Label(self.node_form, text=label_text, bg="#ded5c4").pack(anchor="w")
-            tk.Entry(self.node_form, textvariable=variable).pack(fill=tk.X, pady=(0, 8))
+        # ── Basic info ───────────────────────────────────────────────
+        basic = tk.Frame(self.node_form, bg="#ded5c4")
+        basic.pack(fill=tk.X, padx=6, pady=(4, 0))
 
-        checks = tk.Frame(self.node_form, bg="#ded5c4")
-        checks.pack(fill=tk.X, pady=(0, 8))
-        tk.Checkbutton(checks, text="Acts as Source", variable=self.node_source_var, bg="#ded5c4").pack(anchor="w")
-        tk.Checkbutton(checks, text="Acts as Sink", variable=self.node_sink_var, bg="#ded5c4").pack(anchor="w")
-        
-        self.vtype_frame = tk.LabelFrame(self.node_form, text="Vehicle Types (source)",
-                                          bg="#ded5c4", font=("Arial", 9, "bold"))
+        tk.Label(basic, text="Junction ID", bg="#ded5c4", font=("Arial", 9, "bold")).pack(anchor="w")
+        tk.Entry(basic, textvariable=self.node_id_var).pack(fill=tk.X, pady=(0, 6))
+
+        roles_frame = tk.LabelFrame(basic, text="Role", bg="#ded5c4", font=("Arial", 9, "bold"))
+        roles_frame.pack(fill=tk.X, pady=(0, 6))
+        tk.Checkbutton(roles_frame, text="Acts as Source  (generates vehicles)",
+                       variable=self.node_source_var, bg="#ded5c4",
+                       command=self._on_role_changed).pack(anchor="w", padx=4)
+        tk.Checkbutton(roles_frame, text="Acts as Sink  (absorbs vehicles)",
+                       variable=self.node_sink_var, bg="#ded5c4",
+                       command=self._on_role_changed).pack(anchor="w", padx=4)
+
+        # Source rate display (sum of vehicle type rates)
+        rate_row = tk.Frame(basic, bg="#ded5c4")
+        rate_row.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(rate_row, text="Total Source Rate:", bg="#ded5c4", font=("Arial", 9, "bold")).pack(side=tk.LEFT)
+        tk.Label(rate_row, textvariable=self.node_source_rate_var, bg="#ded5c4",
+                 fg="#1a4a1a", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=4)
+        tk.Label(rate_row, text="veh/s", bg="#ded5c4", font=("Arial", 8)).pack(side=tk.LEFT)
+
+        # Junction size
+        tk.Label(basic, text="Junction Size (px)", bg="#ded5c4").pack(anchor="w")
+        tk.Entry(basic, textvariable=self.node_size_var).pack(fill=tk.X, pady=(0, 6))
+
+        # ── Tabbed notebook: Source Config + Advanced ─────────────────
+        try:
+            import tkinter.ttk as ttk
+            nb = ttk.Notebook(self.node_form)
+        except Exception:
+            nb = None
+
+        if nb is not None:
+            self._src_tab  = tk.Frame(nb, bg="#ded5c4")
+            self._adv_tab  = tk.Frame(nb, bg="#ded5c4")
+            nb.add(self._src_tab,  text=" Vehicle Types ")
+            nb.add(self._adv_tab,  text=" Advanced ")
+            nb.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+            self._nb = nb
+        else:
+            # Fallback: no ttk — use plain frames
+            self._src_tab = tk.LabelFrame(self.node_form, text="Vehicle Types", bg="#ded5c4")
+            self._src_tab.pack(fill=tk.X, padx=4, pady=4)
+            self._adv_tab = tk.LabelFrame(self.node_form, text="Advanced", bg="#ded5c4")
+            self._adv_tab.pack(fill=tk.X, padx=4, pady=4)
+            self._nb = None
+
+        # ── Source / Vehicle-types tab ───────────────────────────────
         DEST_COLORS = ["#e53935", "#43a047", "#1e88e5", "#fb8c00", "#8e24aa"]
         self._vtype_rows = []
+        src_scroll_frame = tk.Frame(self._src_tab, bg="#ded5c4")
+        src_scroll_frame.pack(fill=tk.BOTH, expand=True)
+
+        hdr = tk.Frame(src_scroll_frame, bg="#ded5c4")
+        hdr.pack(fill=tk.X, padx=4, pady=(4, 0))
+        tk.Label(hdr, text="#", bg="#ded5c4", width=2, font=("Arial", 8, "bold")).pack(side=tk.LEFT)
+        tk.Label(hdr, text="Destination", bg="#ded5c4", width=10, font=("Arial", 8, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Label(hdr, text="Rate (0–2 veh/s)", bg="#ded5c4", width=14, font=("Arial", 8, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Label(hdr, text="Wt", bg="#ded5c4", width=3, font=("Arial", 8, "bold")).pack(side=tk.LEFT, padx=2)
+
         for vt_idx in range(5):
-            row = tk.Frame(self.vtype_frame, bg="#ded5c4")
-            row.pack(fill=tk.X, pady=1)
-            # Color swatch
+            row = tk.Frame(src_scroll_frame, bg="#ded5c4")
+            row.pack(fill=tk.X, padx=4, pady=2)
             swatch = tk.Label(row, bg=DEST_COLORS[vt_idx], width=2, relief="ridge")
-            swatch.pack(side=tk.LEFT, padx=(2, 4))
-            tk.Label(row, text=f"T{vt_idx+1}", bg="#ded5c4", width=2).pack(side=tk.LEFT)
+            swatch.pack(side=tk.LEFT, padx=(0, 3))
+
             dest_var = tk.StringVar(value="")
             flow_var = tk.StringVar(value="0.0")
             wt_var   = tk.StringVar(value=str(vt_idx + 1))
-            tk.Label(row, text="Dst:", bg="#ded5c4").pack(side=tk.LEFT)
-            dest_entry = tk.Entry(row, textvariable=dest_var, width=5)
-            dest_entry.pack(side=tk.LEFT, padx=2)
-            tk.Label(row, text="Rate:", bg="#ded5c4").pack(side=tk.LEFT)
-            tk.Entry(row, textvariable=flow_var, width=5).pack(side=tk.LEFT, padx=2)
-            tk.Label(row, text="Wt:", bg="#ded5c4").pack(side=tk.LEFT)
+
+            # Destination: OptionMenu (dropdown); choices refreshed when loading selection
+            dest_om = tk.OptionMenu(row, dest_var, "")
+            dest_om.config(width=7, bg="#f5f0e8")
+            dest_om.pack(side=tk.LEFT, padx=2)
+
+            tk.Entry(row, textvariable=flow_var, width=6).pack(side=tk.LEFT, padx=2)
             tk.Entry(row, textvariable=wt_var, width=3).pack(side=tk.LEFT, padx=2)
+
             self._vtype_rows.append({
                 "dest": dest_var, "flow": flow_var, "weight": wt_var,
                 "swatch": swatch, "color": DEST_COLORS[vt_idx],
+                "dest_om": dest_om,
             })
-        
-        tk.Button(self.node_form, text="Apply Junction", command=self._apply_node_form).pack(fill=tk.X, pady=(6, 6))
-        tk.Button(self.node_form, text="Delete Junction", command=self._delete_selected).pack(fill=tk.X)
+
+            # Recompute total rate whenever flow changes
+            flow_var.trace_add("write", lambda *_: self._refresh_source_rate_display())
+
+        # ── Advanced tab ─────────────────────────────────────────────
+        adv = self._adv_tab
+        tk.Label(adv, text="Signal Algorithm", bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6, pady=(6, 0))
+        algo_menu = tk.OptionMenu(adv, self.node_signal_algo_var,
+                                  "wfq_lane", "fixed", "queue_weighted", "pressure")
+        algo_menu.config(bg="#f5f0e8")
+        algo_menu.pack(fill=tk.X, padx=6, pady=(0, 4))
+
+        for label_text, var in [("Min Green (s)", self.node_min_green_var),
+                                  ("Max Green (s)", self.node_max_green_var),
+                                  ("Service Rate", self.node_service_var)]:
+            tk.Label(adv, text=label_text, bg="#ded5c4", font=("Arial", 9)).pack(anchor="w", padx=6)
+            tk.Entry(adv, textvariable=var).pack(fill=tk.X, padx=6, pady=(0, 4))
+
+        tk.Label(adv, text="(Min/Max Green apply only to signalized junctions\nwith 2+ incoming roads)",
+                 bg="#ded5c4", fg="#665544", font=("Arial", 8), justify=tk.LEFT,
+                 wraplength=300).pack(anchor="w", padx=6, pady=(0, 8))
+
+        # ── Action buttons ───────────────────────────────────────────
+        btn_frame = tk.Frame(self.node_form, bg="#ded5c4")
+        btn_frame.pack(fill=tk.X, padx=6, pady=8)
+        tk.Button(btn_frame, text="✔  Apply Junction", command=self._apply_node_form,
+                  bg="#3a7a3a", fg="white", font=("Arial", 10, "bold"),
+                  relief="raised").pack(fill=tk.X, pady=(0, 4))
+        tk.Button(btn_frame, text="🗑  Delete Selected", command=self._delete_selected,
+                  bg="#9a2a2a", fg="white", font=("Arial", 10, "bold"),
+                  relief="raised").pack(fill=tk.X)
 
     def _build_road_form(self) -> None:
         self.road_form = tk.Frame(self.form, bg="#ded5c4")
@@ -460,8 +551,8 @@ class NetworkEditor:
             ("Lane Directions", self.road_lane_dirs_var),
             ("Lane Flow Weights", self.road_lane_flows_var),
         ]:
-            tk.Label(self.road_form, text=label_text, bg="#ded5c4").pack(anchor="w")
-            tk.Entry(self.road_form, textvariable=variable).pack(fill=tk.X, pady=(0, 8))
+            tk.Label(self.road_form, text=label_text, bg="#ded5c4").pack(anchor="w", padx=6)
+            tk.Entry(self.road_form, textvariable=variable).pack(fill=tk.X, padx=6, pady=(0, 6))
 
         tk.Label(
             self.road_form,
@@ -469,9 +560,51 @@ class NetworkEditor:
             justify=tk.LEFT,
             bg="#ded5c4",
             wraplength=320,
-        ).pack(anchor="w", pady=(0, 8))
-        tk.Button(self.road_form, text="Apply Road", command=self._apply_road_form).pack(fill=tk.X, pady=(6, 6))
-        tk.Button(self.road_form, text="Delete Road", command=self._delete_selected).pack(fill=tk.X)
+        ).pack(anchor="w", padx=6, pady=(0, 8))
+        road_btn_frame = tk.Frame(self.road_form, bg="#ded5c4")
+        road_btn_frame.pack(fill=tk.X, padx=6, pady=4)
+        tk.Button(road_btn_frame, text="✔  Apply Road", command=self._apply_road_form,
+                  bg="#3a7a3a", fg="white", font=("Arial", 10, "bold")).pack(fill=tk.X, pady=(0, 4))
+        tk.Button(road_btn_frame, text="🗑  Delete Road", command=self._delete_selected,
+                  bg="#9a2a2a", fg="white", font=("Arial", 10, "bold")).pack(fill=tk.X)
+
+    def _on_role_changed(self) -> None:
+        """Called when source/sink checkboxes change — show/hide vehicle types tab."""
+        is_source = self.node_source_var.get()
+        if self._nb is not None:
+            try:
+                if is_source:
+                    self._nb.tab(0, state="normal")
+                else:
+                    self._nb.tab(0, state="disabled")
+                    self._nb.select(1)
+            except Exception:
+                pass
+        self._refresh_source_rate_display()
+
+    def _refresh_source_rate_display(self) -> None:
+        total = 0.0
+        for row in self._vtype_rows:
+            total += _safe_float(row["flow"].get(), 0.0)
+        self.node_source_rate_var.set(f"{total:.3f}")
+
+    def _get_possible_destinations(self, exclude_id: str) -> List[str]:
+        """Return all node IDs that could serve as destinations from a given source."""
+        return [n["id"] for n in self.network["nodes"]
+                if n["id"] != exclude_id and not n.get("is_source", False)]
+
+    def _refresh_dest_dropdowns(self, current_node_id: str) -> None:
+        """Repopulate destination OptionMenus with nodes reachable from current_node_id."""
+        choices = self._get_possible_destinations(current_node_id)
+        if not choices:
+            choices = [""]
+        for row in self._vtype_rows:
+            menu = row["dest_om"]["menu"]
+            menu.delete(0, "end")
+            menu.add_command(label="(none)", command=lambda v=row["dest"]: v.set(""))
+            for c in choices:
+                menu.add_command(label=c, command=lambda v=row["dest"], val=c: v.set(val))
+
 
     def _bind_canvas(self) -> None:
         self.canvas.bind("<Button-1>", self._on_left_click)
@@ -567,12 +700,10 @@ class NetworkEditor:
         node = self._node_at(event.x, event.y)
         if node is not None:
             self._select_object("node", node["id"])
-            self._delete_selected()
             return
         road = self._road_at(event.x, event.y)
         if road is not None:
             self._select_object("road", road["id"])
-            self._delete_selected()
 
     def _add_junction(self, x: int, y: int) -> None:
         node = {
@@ -642,14 +773,15 @@ class NetworkEditor:
             self.node_id_var.set(node["id"])
             self.node_source_var.set(bool(node.get("is_source")))
             self.node_sink_var.set(bool(node.get("is_sink")))
-            self.node_source_rate_var.set(str(node.get("source_rate", 0.25)))
-            self.node_destinations_var.set(", ".join(node.get("destinations", [])))
-            self.node_dest_weights_var.set(_weights_to_text(node.get("destination_weights", {})))
             self.node_signal_algo_var.set(node.get("signal_algorithm", "wfq_lane"))
             self.node_min_green_var.set(str(node.get("min_green", 4)))
             self.node_max_green_var.set(str(node.get("max_green", 12)))
             self.node_service_var.set(str(node.get("service_rate", 1)))
             self.node_size_var.set(str(node.get("junction_width", 60)))
+
+            # Refresh destination dropdowns for this node
+            self._refresh_dest_dropdowns(node["id"])
+
             # Populate vehicle type rows
             vtypes = node.get("vehicle_types", [])
             for vt_idx, row_vars in enumerate(self._vtype_rows):
@@ -662,11 +794,18 @@ class NetworkEditor:
                     row_vars["dest"].set("")
                     row_vars["flow"].set("0.0")
                     row_vars["weight"].set(str(vt_idx + 1))
-            # Show vtype panel only for source nodes
-            if node.get("is_source"):
-                self.vtype_frame.pack(fill=tk.X, pady=(6, 0))
-            else:
-                self.vtype_frame.pack_forget()
+
+            self._refresh_source_rate_display()
+
+            # Show/hide vehicle types tab based on source role
+            if self._nb is not None:
+                try:
+                    state = "normal" if node.get("is_source") else "disabled"
+                    self._nb.tab(0, state=state)
+                    if not node.get("is_source"):
+                        self._nb.select(1)
+                except Exception:
+                    pass
 
             self._show_form("node")
             return
@@ -695,26 +834,55 @@ class NetworkEditor:
             self.node_form.pack(fill=tk.BOTH, expand=True)
         elif form_name == "road":
             self.road_form.pack(fill=tk.BOTH, expand=True)
-            self.vtype_frame.pack_forget()
 
     def _apply_node_form(self) -> None:
         if self.selected_kind != "node" or self.selected_id is None:
             return
         node = self._find_node(self.selected_id)
-        node["id"] = self.node_id_var.get().strip() or node["id"]
+        new_id = self.node_id_var.get().strip() or node["id"]
+        old_id = node["id"]
+
+        # Update roads that reference this node if ID changed
+        if new_id != old_id:
+            for road in self.network["roads"]:
+                if road["from"] == old_id:
+                    road["from"] = new_id
+                if road["to"] == old_id:
+                    road["to"] = new_id
+            for other_node in self.network["nodes"]:
+                if other_node["id"] == old_id:
+                    continue
+                other_node["destinations"] = [
+                    new_id if d == old_id else d
+                    for d in other_node.get("destinations", [])
+                ]
+                if old_id in other_node.get("destination_weights", {}):
+                    w = other_node["destination_weights"].pop(old_id)
+                    other_node["destination_weights"][new_id] = w
+                vtypes = other_node.get("vehicle_types", [])
+                for vt in vtypes:
+                    if vt.get("destination") == old_id:
+                        vt["destination"] = new_id
+
+        node["id"] = new_id
         node["is_source"] = bool(self.node_source_var.get())
         node["is_sink"] = bool(self.node_sink_var.get())
-        if node["is_source"] and node["is_sink"]:
-            node["is_sink"] = False
-        node["source_rate"] = _safe_float(self.node_source_rate_var.get(), 0.25)
-        node["destinations"] = _csv_list(self.node_destinations_var.get())
-        node["destination_weights"] = _text_to_weights(self.node_dest_weights_var.get())
+        # Both source and sink allowed (pass-through node) — no forced reset
+
         node["signal_algorithm"] = self.node_signal_algo_var.get().strip() or "wfq_lane"
         node["min_green"] = _safe_float(self.node_min_green_var.get(), 4.0)
         node["max_green"] = _safe_float(self.node_max_green_var.get(), 12.0)
         node["service_rate"] = max(1, _safe_int(self.node_service_var.get(), 1))
-        vtypes = []
+
+        size = max(40, _safe_int(self.node_size_var.get(), 60))
+        node["junction_width"] = size
+        node["junction_height"] = size
+
         DEST_COLORS = ["#e53935", "#43a047", "#1e88e5", "#fb8c00", "#8e24aa"]
+        vtypes = []
+        destinations = []
+        destination_weights = {}
+        total_rate = 0.0
         for vt_idx, row_vars in enumerate(self._vtype_rows):
             dest = row_vars["dest"].get().strip()
             flow = _safe_float(row_vars["flow"].get(), 0.0)
@@ -727,11 +895,17 @@ class NetworkEditor:
                     "weight": wt,
                     "color": DEST_COLORS[vt_idx],
                 })
+                total_rate += flow
+                if dest not in destinations:
+                    destinations.append(dest)
+                destination_weights[dest] = destination_weights.get(dest, 0.0) + flow
+
         node["vehicle_types"] = vtypes
-        
-        size = max(40, _safe_int(self.node_size_var.get(), 60))
-        node["junction_width"] = size
-        node["junction_height"] = size
+        node["destinations"] = destinations
+        node["destination_weights"] = destination_weights
+        node["source_rate"] = total_rate
+        self.node_source_rate_var.set(f"{total_rate:.3f}")
+
         self.selected_id = node["id"]
         self.status.set(f"Updated junction {node['id']}")
         self._redraw()
@@ -876,6 +1050,30 @@ class NetworkEditor:
             self._draw_road(road)
         for node in self.network["nodes"]:
             self._draw_node(node)
+        self._draw_legend()
+
+    def _draw_legend(self) -> None:
+        """Draw a compact role legend in the top-right corner of the canvas."""
+        cw = self.canvas.winfo_width() or 820
+        lx = cw - 10
+        ly = 10
+        items = [
+            ("#2e6b2e", "SRC – Source"),
+            ("#7a2a2a", "SNK – Sink"),
+            ("#5a7a3a", "SRC+SNK"),
+            ("#40566b", "Junction"),
+        ]
+        box_w, box_h = 130, 14
+        pad = 6
+        total_h = len(items) * (box_h + pad) + pad
+        self.canvas.create_rectangle(lx - box_w - pad*2, ly, lx, ly + total_h,
+                                     fill="#f0e8d8", outline="#9a8a70", width=1)
+        for i, (color, label) in enumerate(items):
+            iy = ly + pad + i * (box_h + pad)
+            self.canvas.create_rectangle(lx - box_w - pad, iy, lx - box_w - pad + 14, iy + box_h,
+                                         fill=color, outline="#333", width=1)
+            self.canvas.create_text(lx - box_w - pad + 18, iy + box_h // 2,
+                                    text=label, anchor="w", fill="#1a1a1a", font=("Arial", 8))
 
     def _draw_corridor(self, road_a: dict, road_b: dict) -> None:
         start = self._find_node(road_a["from"])
@@ -1002,19 +1200,7 @@ class NetworkEditor:
         self.canvas.create_text(x, y, text=node["id"], fill="white",
                                 font=("Arial", 10, "bold"))
 
-        # Role badges
-        badge_y = y2 + 14
-        badges: List[str] = []
-        if is_source:
-            badges.append("SRC")
-        if is_sink:
-            badges.append("SNK")
-        if badges:
-            badge_color = "#2e8b2e" if is_source else "#cc3300"
-            if is_source and is_sink:
-                badge_color = "#5a8a2e"
-            self.canvas.create_text(x, badge_y, text=" / ".join(badges),
-                                    fill=badge_color, font=("Arial", 8, "bold"))
+        # No role badges below node — roles shown in corner legend
     
     def run(self) -> None:
         self.root.mainloop()

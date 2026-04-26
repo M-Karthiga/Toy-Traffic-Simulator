@@ -1,39 +1,39 @@
 {
   "simulation_time": 180.0,
-  "total_vehicles": 23,
-  "active_vehicles": 17,
-  "arrived_vehicles": 6,
-  "max_active_vehicles": 17,
-  "avg_travel_time_s": 90.66666666666667,
+  "total_vehicles": 16,
+  "active_vehicles": 9,
+  "arrived_vehicles": 7,
+  "max_active_vehicles": 11,
+  "avg_travel_time_s": 103.14285714285714,
   "avg_wait_time_s": 0.0,
-  "throughput_veh_per_s": 0.03333333333333333,
+  "throughput_veh_per_s": 0.03888888888888889,
   "roads": {
     "R1A": {
       "from": "J1",
       "to": "J3",
-      "utilisation": 0.037037037037037035,
-      "avg_travel_time_s": 34.30769230769231,
-      "entered": 15,
-      "exited": 13,
+      "utilisation": 0.022222222222222223,
+      "avg_travel_time_s": 54.0,
+      "entered": 9,
+      "exited": 7,
       "max_occupancy": 4
     },
     "R1B": {
       "from": "J3",
       "to": "J1",
       "utilisation": 0.0,
-      "avg_travel_time_s": 30.0,
-      "entered": 1,
-      "exited": 1,
-      "max_occupancy": 1
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
     },
     "R2A": {
       "from": "J2",
       "to": "J3",
-      "utilisation": 0.0625,
-      "avg_travel_time_s": 60.5,
-      "entered": 4,
-      "exited": 2,
-      "max_occupancy": 3
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
     },
     "R2B": {
       "from": "J3",
@@ -47,11 +47,11 @@
     "R3A": {
       "from": "J3",
       "to": "J5",
-      "utilisation": 0.05,
-      "avg_travel_time_s": 34.0,
+      "utilisation": 0.046875,
+      "avg_travel_time_s": 35.25,
       "entered": 7,
       "exited": 4,
-      "max_occupancy": 3
+      "max_occupancy": 4
     },
     "R3B": {
       "from": "J5",
@@ -65,11 +65,11 @@
     "R4A": {
       "from": "J3",
       "to": "J4",
-      "utilisation": 0.03125,
-      "avg_travel_time_s": 18.833333333333332,
-      "entered": 7,
-      "exited": 6,
-      "max_occupancy": 3
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
     },
     "R4B": {
       "from": "J4",
@@ -84,9 +84,9 @@
       "from": "J4",
       "to": "J6",
       "utilisation": 0.0,
-      "avg_travel_time_s": 32.5,
-      "entered": 6,
-      "exited": 6,
+      "avg_travel_time_s": 36.666666666666664,
+      "entered": 3,
+      "exited": 3,
       "max_occupancy": 3
     },
     "R6B": {
@@ -101,11 +101,11 @@
     "R7A": {
       "from": "J2",
       "to": "J5",
-      "utilisation": 0.014705882352941176,
-      "avg_travel_time_s": 38.666666666666664,
-      "entered": 4,
-      "exited": 3,
-      "max_occupancy": 2
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
     },
     "R7B": {
       "from": "J5",
@@ -115,15 +115,123 @@
       "entered": 0,
       "exited": 0,
       "max_occupancy": 0
+    },
+    "R8A": {
+      "from": "J7",
+      "to": "J3",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R8B": {
+      "from": "J3",
+      "to": "J7",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R9A": {
+      "from": "J7",
+      "to": "J1",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R9B": {
+      "from": "J1",
+      "to": "J7",
+      "utilisation": 0.013157894736842105,
+      "avg_travel_time_s": 41.0,
+      "entered": 7,
+      "exited": 6,
+      "max_occupancy": 3
+    },
+    "R10A": {
+      "from": "J7",
+      "to": "J4",
+      "utilisation": 0.039473684210526314,
+      "avg_travel_time_s": 42.333333333333336,
+      "entered": 6,
+      "exited": 3,
+      "max_occupancy": 3
+    },
+    "R10B": {
+      "from": "J4",
+      "to": "J7",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R11A": {
+      "from": "J8",
+      "to": "J5",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R11B": {
+      "from": "J5",
+      "to": "J8",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R12A": {
+      "from": "J8",
+      "to": "J6",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R12B": {
+      "from": "J6",
+      "to": "J8",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R13A": {
+      "from": "J8",
+      "to": "J5",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
+    },
+    "R13B": {
+      "from": "J5",
+      "to": "J8",
+      "utilisation": 0.0,
+      "avg_travel_time_s": 0.0,
+      "entered": 0,
+      "exited": 0,
+      "max_occupancy": 0
     }
   },
   "junctions": {
     "J1": {
-      "processed": 1,
+      "processed": 0,
       "avg_wait_time_s": 0.0,
-      "max_queue": 1,
+      "max_queue": 0,
       "current_queue": 0,
-      "green_incoming": null,
+      "green_incoming": "R1B",
       "phases": [],
       "algorithm": "wfq_lane"
     },
@@ -137,28 +245,28 @@
       "algorithm": "wfq_lane"
     },
     "J3": {
-      "processed": 15,
+      "processed": 7,
       "avg_wait_time_s": 0.0,
-      "max_queue": 7,
-      "current_queue": 4,
+      "max_queue": 4,
+      "current_queue": 2,
       "green_incoming": "R1A",
       "phases": [],
       "algorithm": "wfq_lane"
     },
     "J4": {
-      "processed": 6,
+      "processed": 3,
       "avg_wait_time_s": 0.0,
       "max_queue": 3,
-      "current_queue": 1,
-      "green_incoming": "R4A",
+      "current_queue": 3,
+      "green_incoming": "R10A",
       "phases": [],
       "algorithm": "wfq_lane"
     },
     "J5": {
-      "processed": 7,
+      "processed": 0,
       "avg_wait_time_s": 0.0,
       "max_queue": 4,
-      "current_queue": 4,
+      "current_queue": 3,
       "green_incoming": "R3A",
       "phases": [],
       "algorithm": "wfq_lane"
@@ -168,20 +276,38 @@
       "avg_wait_time_s": 0.0,
       "max_queue": 3,
       "current_queue": 0,
-      "green_incoming": null,
+      "green_incoming": "R6A",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J7": {
+      "processed": 6,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 3,
+      "current_queue": 1,
+      "green_incoming": "R9B",
+      "phases": [],
+      "algorithm": "wfq_lane"
+    },
+    "J8": {
+      "processed": 0,
+      "avg_wait_time_s": 0.0,
+      "max_queue": 0,
+      "current_queue": 0,
+      "green_incoming": "R11B",
       "phases": [],
       "algorithm": "wfq_lane"
     }
   },
   "sources": {
     "J1": {
-      "generated": 15,
-      "released": 15,
+      "generated": 16,
+      "released": 16,
       "pending": 0
     },
     "J2": {
-      "generated": 8,
-      "released": 8,
+      "generated": 0,
+      "released": 0,
       "pending": 0
     },
     "J5": {
@@ -191,9 +317,17 @@
     }
   },
   "sinks": {
+    "J2": {
+      "arrived": 0,
+      "avg_travel_time_s": 0.0
+    },
+    "J5": {
+      "arrived": 4,
+      "avg_travel_time_s": 91.25
+    },
     "J6": {
-      "arrived": 6,
-      "avg_travel_time_s": 90.66666666666667
+      "arrived": 3,
+      "avg_travel_time_s": 119.0
     }
   }
 }
