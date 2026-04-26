@@ -332,7 +332,7 @@
       "from": "J1",
       "to": "J2",
       "length": 200,
-      "speed_limit": 11,
+      "speed_limit": 11.0,
       "lanes": 2,
       "lane_directions": [
         [
@@ -353,7 +353,7 @@
       "from": "J2",
       "to": "J1",
       "length": 200,
-      "speed_limit": 11,
+      "speed_limit": 11.0,
       "lanes": 2,
       "lane_directions": [
         [
@@ -368,6 +368,48 @@
         1.0
       ],
       "corridor_id": "C6"
+    },
+    {
+      "id": "R7A",
+      "from": "J2",
+      "to": "J5",
+      "length": 251,
+      "speed_limit": 12,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C7"
+    },
+    {
+      "id": "R7B",
+      "from": "J5",
+      "to": "J2",
+      "length": 251,
+      "speed_limit": 12,
+      "lanes": 2,
+      "lane_directions": [
+        [
+          "*"
+        ],
+        [
+          "*"
+        ]
+      ],
+      "lane_flow_weights": [
+        1.0,
+        1.0
+      ],
+      "corridor_id": "C7"
     }
   ]
 }

@@ -33,6 +33,9 @@ class Vehicle:
     total_wait_time: float = 0.0
     distance_travelled_m: float = 0.0
     _wait_started_at: Optional[float] = None
+    type_id: int = 1          # 1–5 vehicle type
+    weight: int = 1           # 1–5 vehicle weight class
+    color_override: Optional[str] = None  # set by source for per-type colouring
 
     DESTINATION_COLORS: ClassVar[List[str]] = [
         "#f94144",
@@ -124,6 +127,8 @@ class Vehicle:
 
     @property
     def color(self) -> str:
+        if self.color_override is not None:
+            return self.color_override
         return self.DESTINATION_COLORS[hash(self.destination_id) % len(self.DESTINATION_COLORS)]
 
     @property

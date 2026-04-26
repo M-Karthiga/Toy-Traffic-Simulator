@@ -57,20 +57,27 @@ class SimulationEngine:
 
     def build(self) -> None:
         for road in self.roads.values():
-            if road.from_node in self.sources:
-                self.sources[road.from_node].add_outgoing_road(road.road_id)
-            if road.from_node in self.junctions:
-                self.junctions[road.from_node].add_outgoing_road(road.road_id)
+            from_id = road.from_node
+            to_id = road.to_node
 
-            if road.to_node in self.sinks:
-                self.sinks[road.to_node].add_incoming_road(road.road_id)
-            if road.to_node in self.junctions:
-                self.junctions[road.to_node].add_incoming_road(road.road_id)
+            # from_node wiring
+            if from_id in self.sources:
+                self.sources[from_id].add_outgoing_road(road.road_id)
+            if from_id in self.junctions:
+                self.junctions[from_id].add_outgoing_road(road.road_id)
+
+            # to_node wiring
+            if to_id in self.sinks:
+                self.sinks[to_id].add_incoming_road(road.road_id)
+            if to_id in self.junctions:
+                self.junctions[to_id].add_incoming_road(road.road_id)
 
         node_ids = list(self.sources) + list(self.junctions) + list(self.sinks)
+        # Deduplicate: a junction-source-sink node appears in multiple lists
+        node_ids = list(dict.fromkeys(node_ids))
         self.router.build_from_network(self.roads, node_ids)
         self._built = True
-
+        
     def run(
         self,
         duration: float,
@@ -108,8 +115,18 @@ class SimulationEngine:
 
     def _spawn_and_release_from_sources(self) -> None:
         for source in self.sources.values():
-            spawned_destinations = source.step(self.dt)
-            for destination_id in spawned_destinations:
+            spawned_list = source.step(self.dt)
+            for spawn in spawned_list:
+                # Support both legacy str and new dict formats
+                if isinstance(spawn, str):
+                    destination_id = spawn
+                    type_id, weight, color_override = 1, 1, None
+                else:
+                    destination_id = spawn["destination"]
+                    type_id = spawn.get("type_id", 1)
+                    weight = spawn.get("weight", 1)
+                    color_override = spawn.get("color", None)
+
                 route = self.router.plan_route(source.source_id, destination_id)
                 if route is None:
                     continue
@@ -119,6 +136,9 @@ class SimulationEngine:
                     destination_id=destination_id,
                     route_nodes=route_nodes,
                     route_roads=route_roads,
+                    type_id=type_id,
+                    weight=weight,
+                    color_override=color_override,
                 )
                 vehicle.spawn_time = self.time
                 vehicle.begin_wait(self.time)
@@ -141,6 +161,7 @@ class SimulationEngine:
             if road is not None and road.accept_vehicle(vehicle, self.time):
                 source.dequeue_vehicle()
 
+
     def _mark_arrived(self, vehicle: Vehicle) -> None:
         if vehicle.vehicle_id in self._vehicles_active:
             self._vehicles_active.pop(vehicle.vehicle_id)
@@ -149,17 +170,26 @@ class SimulationEngine:
     def _drain_terminal_roads(self) -> None:
         current_time = self.time + self.dt
         for road in self.roads.values():
-            if road.to_node not in self.sinks:
+            to_node = road.to_node
+            # Drain into sink if to_node is a pure sink OR a junction that also acts as sink
+            is_terminal = to_node in self.sinks
+            if not is_terminal:
                 continue
+            # If to_node is also a junction (source+sink junction), only drain vehicles
+            # whose destination IS this node (others pass through junction step normally)
+            is_also_junction = to_node in self.junctions
             for lane_index in range(road.lanes):
                 vehicle = road.front_vehicle(lane_index)
                 if vehicle is None:
                     continue
+                if is_also_junction and vehicle.destination_id != to_node:
+                    # Let the junction step handle routing this vehicle onward
+                    continue
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     continue
-                popped.reach_node(road.to_node, current_time, travelled_m=road.length)
-                self.sinks[road.to_node].receive_vehicle(popped, current_time)
+                popped.reach_node(to_node, current_time, travelled_m=road.length)
+                self.sinks[to_node].receive_vehicle(popped, current_time)
                 self._mark_arrived(popped)
 
     def _node_position(self, node_id: str) -> tuple:
