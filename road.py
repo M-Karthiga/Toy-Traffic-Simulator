@@ -213,7 +213,6 @@ class Road:
     def step(self, dt: float, rng) -> None:
         for lane_index in range(self.lanes):
             move_prob = self.movement_probability(dt, lane_index)
-            # Sweep from stop-line backward so forward cells are always free
             for cell_index in range(self.stop_cell - 1, -1, -1):
                 vehicle = self._occupancy[lane_index][cell_index]
                 if vehicle is None:
@@ -222,6 +221,9 @@ class Road:
                     vehicle, lane_index, cell_index, rng, move_prob
                 )
                 if target_lane == lane_index and target_cell == cell_index:
+                    continue
+                # GUARD: never move into an occupied cell
+                if self._occupancy[target_lane][target_cell] is not None:
                     continue
                 self._occupancy[lane_index][cell_index] = None
                 self._occupancy[target_lane][target_cell] = vehicle
@@ -259,15 +261,19 @@ class Road:
                 next_lane = lane_index + lane_shift
                 if not 0 <= next_lane < self.lanes:
                     continue
+                # STRICT: both target cell AND current cell in target lane must be free
                 if self._occupancy[next_lane][cell_index] is not None:
                     continue
+                if cell_index + 1 <= self.stop_cell and self._occupancy[next_lane][cell_index + 1] is not None:
+                    pass  # forward cell blocked, only lateral move available
                 if next_lane not in preferred_for_turn:
                     continue
-                weight = 1.5  # strong pull toward correct lane
+                weight = 1.5
                 candidate_moves.append((next_lane, cell_index, weight))
-                if cell_index + 1 <= self.stop_cell and self._occupancy[next_lane][cell_index + 1] is None:
+                if (cell_index + 1 <= self.stop_cell
+                        and self._occupancy[next_lane][cell_index + 1] is None):
                     candidate_moves.append((next_lane, cell_index + 1, weight + 0.3))
-
+        
         if not candidate_moves or rng.random() >= move_probability:
             return lane_index, cell_index
 
@@ -284,22 +290,23 @@ class Road:
             return 0.0
         return self.cumulative_travel_time / self.total_vehicles_exited
 
-    def vehicle_positions(self) -> Dict[int, Tuple[float, int]]:
+    def vehicle_positions(self) -> Dict[int, Tuple[float, float]]:
         """Return {vehicle_id: (longitudinal_fraction, lane_index)}.
-
-        Vehicles at the stop_cell are placed just SHORT of the junction (0.88)
-        so they render before the junction box, not inside it.
+        
+        Returns raw lane_index (not a 0-1 fraction) so _point_along_road
+        can place each lane at the correct physical offset.
         """
-        positions: Dict[int, Tuple[float, int]] = {}
+        positions: Dict[int, Tuple[float, float]] = {}
         cell_denominator = max(1, self.cell_count - 1)
-        stop_fraction = max(0.0, (self.stop_cell - 0.65) / cell_denominator)
+        stop_fraction = max(0.0, (self.stop_cell - 0.5) / cell_denominator)
 
         for lane_index, lane in enumerate(self._occupancy):
             for cell_index, vehicle in enumerate(lane):
                 if vehicle is not None:
                     longitudinal = stop_fraction if cell_index == self.stop_cell \
                         else cell_index / cell_denominator
-                    positions[vehicle.vehicle_id] = (longitudinal, lane_index)
+                    # Return raw lane_index — engine converts to pixel offset
+                    positions[vehicle.vehicle_id] = (longitudinal, float(lane_index))
         return positions
 
     def lane_signal_state(self, lane_index: int, signal_states: Dict[str, str]) -> str:

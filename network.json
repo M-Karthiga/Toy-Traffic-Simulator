@@ -44,6 +44,13 @@
           "flow_rate": 0.2,
           "weight": 4,
           "color": "#fb8c00"
+        },
+        {
+          "type_id": 5,
+          "destination": "J10",
+          "flow_rate": 0.05,
+          "weight": 5,
+          "color": "#8e24aa"
         }
       ],
       "destinations": [
@@ -55,10 +62,10 @@
       "destination_weights": {
         "J6": 0.1,
         "J9": 0.08,
-        "J10": 0.06,
+        "J10": 0.11,
         "J3": 0.2
       },
-      "source_rate": 0.44
+      "source_rate": 0.49
     },
     {
       "id": "J2",
@@ -77,45 +84,54 @@
         {
           "type_id": 1,
           "destination": "J4",
-          "flow_rate": 0.1,
+          "flow_rate": 0.03,
           "weight": 1,
           "color": "#e53935"
         },
         {
           "type_id": 2,
           "destination": "J9",
-          "flow_rate": 0.1,
+          "flow_rate": 0.02,
           "weight": 3,
           "color": "#43a047"
         },
         {
           "type_id": 3,
           "destination": "J10",
-          "flow_rate": 0.08,
+          "flow_rate": 0.02,
           "weight": 5,
           "color": "#1e88e5"
         },
         {
           "type_id": 4,
           "destination": "J6",
-          "flow_rate": 0.5,
+          "flow_rate": 0.05,
           "weight": 4,
           "color": "#fb8c00"
+        },
+        {
+          "type_id": 5,
+          "destination": "J3",
+          "flow_rate": 0.01,
+          "weight": 5,
+          "color": "#8e24aa"
         }
       ],
       "destinations": [
         "J4",
         "J9",
         "J10",
-        "J6"
+        "J6",
+        "J3"
       ],
       "destination_weights": {
-        "J4": 0.1,
-        "J9": 0.1,
-        "J10": 0.08,
-        "J6": 0.5
+        "J4": 0.03,
+        "J9": 0.02,
+        "J10": 0.02,
+        "J6": 0.05,
+        "J3": 0.01
       },
-      "source_rate": 0.78
+      "source_rate": 0.13
     },
     {
       "id": "J3",
@@ -195,29 +211,45 @@
         {
           "type_id": 2,
           "destination": "J9",
-          "flow_rate": 0.1,
+          "flow_rate": 0.05,
           "weight": 3,
           "color": "#43a047"
         },
         {
           "type_id": 3,
           "destination": "J10",
-          "flow_rate": 0.12,
+          "flow_rate": 0.02,
           "weight": 4,
           "color": "#1e88e5"
+        },
+        {
+          "type_id": 4,
+          "destination": "J2",
+          "flow_rate": 0.02,
+          "weight": 4,
+          "color": "#fb8c00"
+        },
+        {
+          "type_id": 5,
+          "destination": "J2",
+          "flow_rate": 0.01,
+          "weight": 5,
+          "color": "#8e24aa"
         }
       ],
       "destinations": [
         "J4",
         "J9",
-        "J10"
+        "J10",
+        "J2"
       ],
       "destination_weights": {
         "J4": 0.08,
-        "J9": 0.1,
-        "J10": 0.12
+        "J9": 0.05,
+        "J10": 0.02,
+        "J2": 0.03
       },
-      "source_rate": 0.3
+      "source_rate": 0.18
     },
     {
       "id": "J7",

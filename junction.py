@@ -18,8 +18,8 @@ class Junction:
         max_green: float = 12.0,
         yellow_time: float = 1.0,
         service_rate: int = 1,
-        junction_width: float = 58.0,
-        junction_height: float = 58.0,
+        junction_width: float = 80.0,
+        junction_height: float = 80.0,
     ) -> None:
         self.junction_id = junction_id
         self.pos = tuple(pos)
@@ -42,7 +42,10 @@ class Junction:
 
         self.total_processed = 0
         self.max_queue = 0
+        self._phase_wait_time: Dict[Tuple[str, int], float] = {}
+        self._last_green_time: Dict[Tuple[str, int], float] = {}
 
+        
     def add_incoming_road(self, road_id: str) -> None:
         if road_id not in self.incoming_roads:
             self.incoming_roads.append(road_id)
@@ -248,6 +251,8 @@ class Junction:
             return 1.0
         return road.lane_flow_weights[lane_index]
 
+    STARVATION_CAP_S = 60.0  # maximum any phase group can be starved
+
     def _should_switch(self, roads: Dict[str, object]) -> bool:
         if self._current_lane_phase is None:
             return True
@@ -260,7 +265,9 @@ class Junction:
             return False
         if queue_length == 0 and self._phase_elapsed >= self.yellow_time:
             return True
-        return self._phase_elapsed >= max_green
+        if self._phase_elapsed >= max_green:
+            return True
+        return False
 
     def _phase_group_queue_length(self, roads: Dict[str, object]) -> int:
         active_lanes = self._current_phase_group if self._current_phase_group else (
@@ -290,7 +297,16 @@ class Junction:
         if not phases:
             return None
 
-        if self.signal_algorithm == "wfq_lane":
+        # Check starvation: any phase waiting > 60s gets priority
+        now_elapsed = self._phase_elapsed
+        starved = [
+            p for p in phases
+            if self._phase_wait_time.get(p, 0.0) >= 60.0
+            and p != self._current_lane_phase
+        ]
+        if starved:
+            chosen = max(starved, key=lambda p: self._phase_wait_time.get(p, 0.0))
+        elif self.signal_algorithm == "wfq_lane":
             best_phase = None
             best_score = float("-inf")
             for lane_phase in phases:
@@ -303,15 +319,22 @@ class Junction:
                     best_phase = lane_phase
             if best_phase is not None:
                 self._lane_deficit[best_phase] = max(
-                    0.0,
-                    self._lane_deficit[best_phase] - self._lane_weight(roads, best_phase),
+                    0.0, self._lane_deficit[best_phase] - self._lane_weight(roads, best_phase)
                 )
-            return best_phase
+            chosen = best_phase
+        else:
+            chosen = max(
+                phases,
+                key=lambda p: self._lane_queue_length(roads, p) * self._lane_weight(roads, p),
+            )
 
-        return max(
-            phases,
-            key=lambda lane_phase: self._lane_queue_length(roads, lane_phase) * self._lane_weight(roads, lane_phase),
-        )
+        # Update starvation timers
+        for p in phases:
+            if p == chosen:
+                self._phase_wait_time[p] = 0.0  # reset on selection
+            else:
+                self._phase_wait_time[p] = self._phase_wait_time.get(p, 0.0) + self._phase_elapsed
+        return chosen
 
     def __repr__(self) -> str:
         return f"Junction(id={self.junction_id}, phase={self._current_lane_phase}, processed={self.total_processed})"

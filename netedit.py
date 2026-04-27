@@ -1225,8 +1225,8 @@ class NetworkEditor:
         self.canvas.create_text(mx, my - 14, text=f"{road['id']}  {lanes}L", fill="#2a2520", font=("Arial", 9, "bold"))
 
     def _draw_node(self, node: dict) -> None:
-        width = node.get("junction_width", 60)
-        height = node.get("junction_height", 60)
+        width = node.get("junction_width", 80)*0.55
+        height = node.get("junction_height", 80)*0.55
         x, y = node["x"], node["y"]
         x1, y1 = x - width / 2, y - height / 2
         x2, y2 = x + width / 2, y + height / 2

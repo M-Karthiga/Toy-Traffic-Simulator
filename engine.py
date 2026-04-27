@@ -344,21 +344,35 @@ def _angle_between(start: tuple, end: tuple) -> float:
     return math.degrees(math.atan2(end[1] - start[1], end[0] - start[0]))
 
 
-def _point_along_road(start: tuple, end: tuple, fraction: float, lane_index: int, lane_count: int) -> tuple:
+def _point_along_road(
+    start: tuple, end: tuple,
+    fraction: float,
+    lane_index: int,     
+    lane_count: int,
+) -> tuple:
     import math
 
-    x = start[0] + (end[0] - start[0]) * fraction
-    y = start[1] + (end[1] - start[1]) * fraction
+    # Point along road centreline
+    cx = start[0] + (end[0] - start[0]) * fraction
+    cy = start[1] + (end[1] - start[1]) * fraction
+
+    # Perpendicular unit vector (left of travel direction)
     dx = end[0] - start[0]
     dy = end[1] - start[1]
     length = math.hypot(dx, dy) or 1.0
-    nx = -dy / length
-    ny = dx / length
-    if lane_count <= 1:
-        inner_offset = 0.0
-    else:
-        lane_center = (lane_count - 1) / 2.0
-        inner_offset = (lane_index - lane_center) * 6.5
-    carriageway_offset = 6.5 + max(0, lane_count - 1) * 3.0
-    offset = carriageway_offset + inner_offset
-    return x + nx * offset, y + ny * offset
+    nx = -dy / length   # left-normal x
+    ny =  dx / length   # left-normal y
+
+    LANE_WIDTH = 7.0        # pixels per lane
+    ROAD_EDGE_MARGIN = 4.0  # gap from centreline to edge of first lane
+
+    # For a one-directional road all lanes sit on the LEFT of the centreline.
+    # Lane 0 = leftmost (kerb), lane n-1 = closest to centre.
+    # Offset: lane 0 → +(edge_margin + 0.5*lane_width)
+    #         lane 1 → +(edge_margin + 1.5*lane_width)  etc.
+    lane_offset = ROAD_EDGE_MARGIN + (lane_index + 0.5) * LANE_WIDTH
+
+    return (
+        cx + nx * lane_offset,
+        cy + ny * lane_offset,
+    )

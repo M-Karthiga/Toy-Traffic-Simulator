@@ -1,38 +1,3 @@
-"""Routing for the traffic simulator.
-
-HOW ROUTING WORKS
------------------
-1. BUILD PHASE (build_from_network):
-   The Router reads every Road object and builds a weighted directed graph:
-     node → [(neighbour_node, road_id, travel_cost), ...]
-   Cost = road.length / road.speed_limit  (travel time in seconds at free-flow speed).
-
-2. PLAN ROUTE (plan_route):
-   Dijkstra's algorithm finds the minimum-cost path of NODES from source to sink.
-   The result is cached so repeated source→dest pairs pay zero cost after the first call.
-   Returns (route_nodes, route_roads):
-     route_nodes = ["J1", "J3", "J5"]
-     route_roads = ["R1A", "R3A"]        ← one road per consecutive node pair
-
-3. LANE ASSIGNMENT – Indian left-keep rule:
-   Once a vehicle is on a road it must queue at a lane that is legal for its next turn.
-   India drives on the LEFT, so:
-     • Left-turn  → leftmost lane  (index 0)
-     • Straight   → middle lanes   (index 1 … n-2) or any for single-lane
-     • Right-turn → rightmost lane (index n-1)
-   The geometry between (current road direction) and (next road direction) is used to
-   classify the turn angle:
-     angle < -45°  → left turn
-     angle > +45°  → right turn
-     otherwise     → straight
-   This replaces the old explicit lane_directions[] lookup for multi-lane roads.
-   Single-lane roads (lanes==1) still use lane_directions=["*"] and need no config.
-
-4. SIGNAL-AWARE LANE PICK:
-   best_entry_lane() on the Road respects the Indian rule via allowed_lanes_for_turn().
-   Vehicles nearer the stop-line (cells ≥ stop_cell-4) will NOT change lane, matching
-   real queuing behaviour.
-"""
 
 from __future__ import annotations
 
@@ -66,11 +31,16 @@ class Router:
         if node_positions:
             self._positions.update(node_positions)
         for road in roads.values():
+            # Fewer lanes = higher cost (single-lane street costs more than 4-lane road)
+            # Base cost = travel time at free-flow speed
+            base_cost = road.length / max(1.0, road.speed_limit)
+            # Lane penalty: inversely scale by lanes (1 lane → ×2.0, 4 lanes → ×0.5)
+            lane_factor = 2.0 / max(1, road.lanes)
             self.add_edge(
                 road.from_node,
                 road.to_node,
                 road.road_id,
-                road.length / max(1.0, road.speed_limit),
+                base_cost * lane_factor,
             )
 
     def road_for_edge(self, from_node: str, to_node: str) -> Optional[str]:

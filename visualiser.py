@@ -63,8 +63,8 @@ class Visualiser:
         ax.set_aspect("equal")
 
         self._draw_static_map(ax)
-        time_text = ax.text(0.02, 0.96, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=11, va="top")
-        queue_text = ax.text(0.02, 0.94, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=9, va="top")
+        time_text = ax.text(0.02, 1.0, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=11, va="top")
+        queue_text = ax.text(0.02, 0.95, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=9, va="top")
         vehicle_artists: List[patches.Patch] = []
 
         def update(frame):
@@ -152,7 +152,7 @@ class Visualiser:
                     continue
             start = self._node_pos(road.from_node)
             end = self._node_pos(road.to_node)
-            road_width = 6 + road.lanes * 4
+            road_width = road.lanes *7 + 4
             ax.plot([start[0], end[0]], [start[1], end[1]], color=ROAD_EDGE, linewidth=road_width + 3, solid_capstyle="butt", zorder=1)
             ax.plot([start[0], end[0]], [start[1], end[1]], color=ROAD_SURFACE, linewidth=road_width, solid_capstyle="butt", zorder=2)
             ax.annotate("", xy=end, xytext=start, arrowprops=dict(arrowstyle="-|>", color=ROAD_EDGE, lw=1.6), zorder=3)
@@ -167,25 +167,39 @@ class Visualiser:
             ax.text(sink.pos[0], sink.pos[1] + 26, sink.sink_id, ha="center", fontsize=9, color=TEXT_COLOR)
 
         for junction in self.engine.junctions.values():
-            width = getattr(junction, "junction_width", 60) * 0.28
-            height = getattr(junction, "junction_height", 60) * 0.28
+            width = getattr(junction, "junction_width", 80) * 0.38   # was 0.28
+            height = getattr(junction, "junction_height", 80) * 0.38
             ax.add_patch(
                 patches.Rectangle(
                     (junction.pos[0] - width / 2, junction.pos[1] - height / 2),
                     width,
                     height,
-                    facecolor=JUNCTION_COLOR,
-                    edgecolor="#15253a",
+                    facecolor="#3a3a3a",        # dark asphalt grey like SUMO
+                    edgecolor="#111111",
+                    linewidth=2.0,
                     zorder=4,
                 )
             )
-            ax.text(junction.pos[0], junction.pos[1] + 26, junction.junction_id, ha="center", fontsize=9, color=TEXT_COLOR)
+            # Add crosshatch lines inside junction (SUMO style)
+            hatch_spacing = 6
+            for offset in range(-int(width), int(width), hatch_spacing):
+                x0 = junction.pos[0] - width / 2
+                y0 = junction.pos[1] - height / 2
+                ax.plot(
+                    [x0, x0 + width],
+                    [y0 + offset, y0 + offset + width],
+                    color="#555555", linewidth=0.5, alpha=0.4, zorder=4.1,
+                    solid_capstyle="butt"
+                )
+            ax.text(junction.pos[0], junction.pos[1], junction.junction_id,
+                    ha="center", va="center", fontsize=8, color="white",
+                    fontweight="bold", zorder=5)
 
     def _draw_bidirectional_corridor(self, ax, road_a, road_b) -> None:
         start = self._node_pos(road_a.from_node)
         end = self._node_pos(road_a.to_node)
         total_lanes = road_a.lanes + road_b.lanes
-        road_width = 8 + total_lanes * 4
+        road_width = total_lanes * 7 + 6
         ax.plot([start[0], end[0]], [start[1], end[1]], color=ROAD_EDGE, linewidth=road_width + 4, solid_capstyle="butt", zorder=1)
         ax.plot([start[0], end[0]], [start[1], end[1]], color=ROAD_SURFACE, linewidth=road_width, solid_capstyle="butt", zorder=2)
         self._draw_lane_markers(ax, start, end, total_lanes)
