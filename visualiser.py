@@ -64,7 +64,7 @@ class Visualiser:
 
         self._draw_static_map(ax)
         time_text = ax.text(0.02, 0.96, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=11, va="top")
-        queue_text = ax.text(0.02, 0.91, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=9, va="top")
+        queue_text = ax.text(0.02, 0.94, "", transform=ax.transAxes, color=TEXT_COLOR, fontsize=9, va="top")
         vehicle_artists: List[patches.Patch] = []
 
         def update(frame):
@@ -266,8 +266,9 @@ class Visualiser:
                 start = self._node_pos(road.from_node)
                 end = self._node_pos(road.to_node)
                 for lane_index in range(road.lanes):
-                    sx = end[0] - (end[0] - start[0]) * 0.14
-                    sy = end[1] - (end[1] - start[1]) * 0.14
+                    stop_fraction = max(0.0, (road.stop_cell - 0.2) / max(1, road.cell_count - 1))
+                    sx = start[0] + (end[0] - start[0]) * stop_fraction
+                    sy = start[1] + (end[1] - start[1]) * stop_fraction
                     sx, sy = _offset_point((sx, sy), start, lane_index - (road.lanes - 1) / 2, 7.0)
                     color = "#2ecc71" if states.get(f"{road_id}:{lane_index}") == "GREEN" else "#e63946"
                     light = patches.Circle((sx, sy), radius=2.8, facecolor=color, edgecolor="#111111", zorder=8)

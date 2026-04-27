@@ -25,9 +25,9 @@ class Junction:
         self.pos = tuple(pos)
         self.signal_algorithm = signal_algorithm
         self.phases = list(phases or [])
-        self.default_min_green = float(min_green)
-        self.default_max_green = float(max_green)
-        self.yellow_time = float(yellow_time)
+        self.default_min_green = max(10.0, float(min_green))
+        self.default_max_green = max(15.0, float(max_green), self.default_min_green)
+        self.yellow_time = max(2.0, float(yellow_time))
         self.service_rate = max(1, int(service_rate))
         self.junction_width = float(junction_width)
         self.junction_height = float(junction_height)
@@ -253,7 +253,7 @@ class Junction:
             return True
         if self.total_queued(roads) == 0:
             return False
-        queue_length = self._lane_queue_length(roads, self._current_lane_phase)
+        queue_length = self._phase_group_queue_length(roads)
         min_green = self.default_min_green
         max_green = self._green_duration_for_lane(roads, self._current_lane_phase)
         if self._phase_elapsed < min_green:
@@ -261,6 +261,12 @@ class Junction:
         if queue_length == 0 and self._phase_elapsed >= self.yellow_time:
             return True
         return self._phase_elapsed >= max_green
+
+    def _phase_group_queue_length(self, roads: Dict[str, object]) -> int:
+        active_lanes = self._current_phase_group if self._current_phase_group else (
+            [self._current_lane_phase] if self._current_lane_phase else []
+        )
+        return sum(self._lane_queue_length(roads, lane_phase) for lane_phase in active_lanes)
 
     def _green_duration_for_lane(self, roads: Dict[str, object], lane_phase: Tuple[str, int]) -> float:
         queue_length = self._lane_queue_length(roads, lane_phase)

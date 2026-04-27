@@ -220,11 +220,17 @@ class SimulationEngine:
             positions = road.vehicle_positions()
             start_x, start_y = self._node_position(road.from_node)
             end_x, end_y = self._node_position(road.to_node)
-            for vehicle_id, (fraction, lateral) in positions.items():
+            for vehicle_id, (fraction, lane_index) in positions.items():
                 vehicle = self._vehicles_active.get(vehicle_id)
                 if vehicle is None:
                     continue
-                x, y = _point_along_road((start_x, start_y), (end_x, end_y), fraction, lateral, road.lanes)
+                x, y = _point_along_road(
+                    (start_x, start_y),
+                    (end_x, end_y),
+                    fraction,
+                    lane_index,
+                    road.lanes,
+                )
                 vehicle_entries.append(
                     {
                         "id": vehicle.vehicle_id,
@@ -338,7 +344,7 @@ def _angle_between(start: tuple, end: tuple) -> float:
     return math.degrees(math.atan2(end[1] - start[1], end[0] - start[0]))
 
 
-def _point_along_road(start: tuple, end: tuple, fraction: float, lateral: float, lane_count: int) -> tuple:
+def _point_along_road(start: tuple, end: tuple, fraction: float, lane_index: int, lane_count: int) -> tuple:
     import math
 
     x = start[0] + (end[0] - start[0]) * fraction
@@ -348,6 +354,11 @@ def _point_along_road(start: tuple, end: tuple, fraction: float, lateral: float,
     length = math.hypot(dx, dy) or 1.0
     nx = -dy / length
     ny = dx / length
-    lane_span = (lane_count - 1) * 7.0
-    offset = (lateral - 0.5) * lane_span
+    if lane_count <= 1:
+        inner_offset = 0.0
+    else:
+        lane_center = (lane_count - 1) / 2.0
+        inner_offset = (lane_index - lane_center) * 6.5
+    carriageway_offset = 6.5 + max(0, lane_count - 1) * 3.0
+    offset = carriageway_offset + inner_offset
     return x + nx * offset, y + ny * offset

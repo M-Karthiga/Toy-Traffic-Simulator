@@ -12,7 +12,7 @@ from visualiser import Visualiser
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Mini SUMO-style traffic simulator")
+    parser = argparse.ArgumentParser(description="Mini traffic simulator")
     parser.add_argument("--duration", type=float, default=180.0, help="Simulation duration in seconds")
     parser.add_argument("--dt", type=float, default=1.0, help="Simulation time step")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
@@ -49,7 +49,7 @@ def main() -> None:
     engine.build()
 
     print("=" * 68)
-    print("Mini SUMO-Style Traffic Simulator")
+    print("Mini Traffic Simulator")
     print("=" * 68)
     print(f"Nodes: {len(network['nodes'])}   Roads: {len(network['roads'])}")
     print(f"Running for {args.duration:.0f}s with dt={args.dt:.2f}s")

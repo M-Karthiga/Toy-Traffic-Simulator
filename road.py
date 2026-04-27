@@ -45,7 +45,7 @@ class Road:
         lane_directions: Optional[Sequence[Sequence[str]]] = None,
         lane_flow_weights: Optional[Sequence[float]] = None,
         corridor_id: Optional[str] = None,
-        stop_line_offset: int = 1,
+        stop_line_offset: int = 2,
     ) -> None:
         self.road_id = road_id
         self.from_node = from_node
@@ -59,7 +59,7 @@ class Road:
 
         self.cell_count = max(3, int(math.ceil(self.length / self.cell_length)))
         self.capacity = self.cell_count * self.lanes
-        self.stop_cell = self.cell_count - 1
+        self.stop_cell = max(1, self.cell_count - 1 - self.stop_line_offset)
         self._occupancy: List[List[Optional[object]]] = [
             [None for _ in range(self.cell_count)] for _ in range(self.lanes)
         ]
@@ -284,24 +284,22 @@ class Road:
             return 0.0
         return self.cumulative_travel_time / self.total_vehicles_exited
 
-    def vehicle_positions(self) -> Dict[int, Tuple[float, float]]:
-        """Return {vehicle_id: (longitudinal_fraction, lateral_fraction)}.
+    def vehicle_positions(self) -> Dict[int, Tuple[float, int]]:
+        """Return {vehicle_id: (longitudinal_fraction, lane_index)}.
 
         Vehicles at the stop_cell are placed just SHORT of the junction (0.88)
         so they render before the junction box, not inside it.
         """
-        positions: Dict[int, Tuple[float, float]] = {}
+        positions: Dict[int, Tuple[float, int]] = {}
         cell_denominator = max(1, self.cell_count - 1)
-        lane_denominator = max(1, self.lanes - 1)
-        stop_fraction = max(0.0, (self.stop_cell - 0.5) / cell_denominator)
+        stop_fraction = max(0.0, (self.stop_cell - 0.65) / cell_denominator)
 
         for lane_index, lane in enumerate(self._occupancy):
-            lateral = 0.5 if self.lanes == 1 else lane_index / lane_denominator
             for cell_index, vehicle in enumerate(lane):
                 if vehicle is not None:
                     longitudinal = stop_fraction if cell_index == self.stop_cell \
                         else cell_index / cell_denominator
-                    positions[vehicle.vehicle_id] = (longitudinal, lateral)
+                    positions[vehicle.vehicle_id] = (longitudinal, lane_index)
         return positions
 
     def lane_signal_state(self, lane_index: int, signal_states: Dict[str, str]) -> str:
