@@ -5,7 +5,7 @@
 
 ## Overview
 
-A toy traffic simulator for communication networks. Supports custom network topologies via JSON and a built-in GUI editor powered by `netedit`.
+A toy simulator for traffic networks. Supports custom network topologies via JSON and a built-in GUI editor powered by `netedit`.
 
 ---
 
