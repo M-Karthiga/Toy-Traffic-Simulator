@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Traffic Simulator – Python dependencies
+# Install with:  pip install -r requirements.txt
+#
+# Python >= 3.9 is required (uses dataclasses, __future__ annotations, etc.)
+# tkinter ships with the standard CPython installer on Windows and macOS.
+# On Linux install it separately:
+#   Ubuntu/Debian:  sudo apt install python3-tk
+#   Fedora:         sudo dnf install python3-tkinter
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Visualisation – animated GIF / PNG statistics output
+matplotlib>=3.7.0
+
+# GIF writer backend used by matplotlib.animation.PillowWriter
+Pillow>=10.0.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Optional – only needed if you want MP4 output instead of GIF
+# Uncomment the line below and make sure ffmpeg is also installed on your system
+# (https://ffmpeg.org/download.html)
+# ─────────────────────────────────────────────────────────────────────────────
+# ffmpeg-python>=0.2.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Standard-library modules used (no installation needed):
+#   argparse, collections, dataclasses, heapq, itertools, json,
+#   math, os, pathlib, random, tkinter, typing
+# ─────────────────────────────────────────────────────────────────────────────
