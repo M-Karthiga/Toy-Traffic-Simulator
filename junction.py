@@ -26,7 +26,7 @@ class Junction:
         self.signal_algorithm = signal_algorithm
         self.phases = list(phases or [])
         self.default_min_green = max(10.0, float(min_green))
-        self.default_max_green = max(15.0, float(max_green), self.default_min_green)
+        self.default_max_green = max(70.0, float(max_green), self.default_min_green)
         self.yellow_time = max(2.0, float(yellow_time))
         self.service_rate = max(1, int(service_rate))
         self.junction_width = float(junction_width)
@@ -126,11 +126,14 @@ class Junction:
                     self.total_processed += 1
                     continue
 
+                
                 next_road = roads.get(desired_road_id)
                 if next_road is None:
                     break
                 target_lane = next_road.best_entry_lane(vehicle.downstream_target_after_next_entry())
                 if target_lane is None:
+                    break
+                if not next_road.lane_can_accept(target_lane):
                     break
 
                 popped = road.pop_front_vehicle(lane_index, current_time)
@@ -138,7 +141,11 @@ class Junction:
                     break
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                 if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
-                    road._occupancy[lane_index][road.stop_cell] = popped
+                    # next_road full: find the cell the vehicle was at and restore it
+                    for restore_cell in range(road.stop_cell, -1, -1):
+                        if road._occupancy[lane_index][restore_cell] is None:
+                            road._occupancy[lane_index][restore_cell] = popped
+                            break
                     break
                 moved.append(popped)
                 self.total_processed += 1
@@ -213,13 +220,18 @@ class Junction:
                 target_lane = next_road.best_entry_lane(vehicle.downstream_target_after_next_entry())
                 if target_lane is None:
                     continue
+                if not next_road.lane_can_accept(target_lane):
+                    continue
 
                 popped = road.pop_front_vehicle(lane_index, current_time)
                 if popped is None:
                     continue
                 popped.reach_node(self.junction_id, current_time, travelled_m=road.length)
                 if not next_road.accept_vehicle(popped, current_time, preferred_lane=target_lane):
-                    road._occupancy[lane_index][road.stop_cell] = popped
+                    for restore_cell in range(road.stop_cell, -1, -1):
+                        if road._occupancy[lane_index][restore_cell] is None:
+                            road._occupancy[lane_index][restore_cell] = popped
+                            break
                     continue
                 moved.append(popped)
                 self.total_processed += 1
