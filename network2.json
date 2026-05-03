@@ -9,7 +9,7 @@
       "y": 208,
       "is_source": true,
       "is_sink": false,
-      "source_rate": 0.7,
+      "source_rate": 0.5,
       "source_mode": "poisson",
       "destinations": [
         "J5",
@@ -17,7 +17,7 @@
       ],
       "destination_weights": {
         "J5": 0.3,
-        "J6": 0.4
+        "J6": 0.2
       },
       "signal_algorithm": "wfq_lane",
       "min_green": 4.0,
@@ -36,7 +36,7 @@
         {
           "type_id": 2,
           "destination": "J6",
-          "flow_rate": 0.4,
+          "flow_rate": 0.2,
           "weight": 2,
           "color": "#43a047"
         }
@@ -66,15 +66,15 @@
       "y": 369,
       "is_source": true,
       "is_sink": false,
-      "source_rate": 0.8,
+      "source_rate": 0.5,
       "source_mode": "poisson",
       "destinations": [
         "J2",
         "J5"
       ],
       "destination_weights": {
-        "J2": 0.5,
-        "J5": 0.3
+        "J2": 0.30000000000000004,
+        "J5": 0.2
       },
       "signal_algorithm": "wfq_lane",
       "min_green": 4.0,
@@ -86,21 +86,21 @@
         {
           "type_id": 1,
           "destination": "J2",
-          "flow_rate": 0.3,
+          "flow_rate": 0.2,
           "weight": 1,
           "color": "#e53935"
         },
         {
           "type_id": 2,
           "destination": "J2",
-          "flow_rate": 0.2,
+          "flow_rate": 0.1,
           "weight": 3,
           "color": "#43a047"
         },
         {
           "type_id": 3,
           "destination": "J5",
-          "flow_rate": 0.3,
+          "flow_rate": 0.2,
           "weight": 1,
           "color": "#1e88e5"
         }
